@@ -226,23 +226,18 @@ const DETAILS: Record<string, {muscles:string;steps:string[];tip:string}> = {
   "Lateral Raises":{muscles:"Side Deltoids",steps:["DBs at sides, slight elbow bend","Raise to shoulder height","Lead with elbows","Pause at top","3–4 second lowering"],tip:"Light and slow beats heavy and sloppy."},
 };
 
-function LoginScreen({onLogin}:{onLogin:()=>void}){
+function LoginScreen(){
   const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState<string|null>(null);
   const handleLogin=async()=>{
     setLoading(true);
-    try{
-      const {error}=await supabase.auth.signInWithOAuth({
-        provider:"google",
-        options:{redirectTo:window.location.origin}
-      });
-      if(error)throw error;
-    }catch(err){
-      console.error(err);
-      // Fallback for demo mode
-      onLogin();
-    }finally{
-      setLoading(false);
-    }
+    setErr(null);
+    const {error}=await supabase.auth.signInWithOAuth({
+      provider:"google",
+      options:{redirectTo:window.location.origin}
+    });
+    if(error){setErr(error.message);setLoading(false);}
+    // On success the browser redirects away — no further action needed here
   };
   return(
     <div style={{minHeight:"100vh",background:M.background,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",fontFamily:FONT}}>
@@ -257,6 +252,7 @@ function LoginScreen({onLogin}:{onLogin:()=>void}){
         <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.2 0 5.9 1.1 8.1 2.9l6-6C34.3 3.1 29.5 1 24 1 15.1 1 7.5 6.2 4 13.7l7 5.4C12.8 13.3 17.9 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.6c0-1.6-.1-2.8-.4-4H24v7.7h12.5c-.5 2.8-2.2 5.2-4.7 6.8l7.3 5.7c4.3-3.9 6.9-9.7 6.9-16.2z"/><path fill="#FBBC05" d="M11 28.1l-7 5.4C6.5 40 14.3 45 24 45c5.6 0 10.3-1.9 13.7-5.1l-7.3-5.7c-1.8 1.2-4.1 1.9-6.4 1.9-6.1 0-11.3-4.1-13.1-9.7l.1-.3z"/><path fill="#EA4335" d="M4 13.7l7 5.4C12.8 13.3 17.9 9.5 24 9.5c3.2 0 5.9 1.1 8.1 2.9l6-6C34.3 3.1 29.5 1 24 1 15.1 1 7.5 6.2 4 13.7z"/></svg>
         {loading?"Signing in...":"Continue with Google"}
       </button>
+      {err&&<div style={{fontSize:12,color:M.error,marginTop:12,textAlign:"center",fontFamily:FONT,maxWidth:300}}>{err}</div>}
       <div style={{fontSize:12,color:M.onSurfaceVariant,marginTop:20,textAlign:"center",fontFamily:FONT,maxWidth:260,lineHeight:1.6}}>
         Your data is private and only accessible to your Google account
       </div>
@@ -751,14 +747,19 @@ function RoutinesScreen({routines,setRoutines,onStart}:{routines:Routine[];setRo
   );
 }
 
-function HomeScreen({onStartWorkout,onOpenCalendar}:{onStartWorkout:()=>void;onOpenCalendar:()=>void}){
+function HomeScreen({onStartWorkout,onOpenCalendar,firstName}:{onStartWorkout:()=>void;onOpenCalendar:()=>void;firstName:string}){
+  const now=new Date();
+  const hour=now.getHours();
+  const greeting=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
+  const dayName=now.toLocaleDateString("en-US",{weekday:"long"});
+  const dateLabel=now.toLocaleDateString("en-US",{month:"long",day:"numeric"});
   return(
     <div style={{padding:"0 16px 16px",animation:"heroIn .55s cubic-bezier(.2,0,0,1)"}}>
       <div style={{background:M.primaryContainer,borderRadius:28,padding:"28px 24px 24px",marginBottom:16,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",right:-30,top:-30,width:130,height:130,borderRadius:"50%",background:M.primary,opacity:.08}}/>
         <div style={{position:"absolute",right:20,bottom:-40,width:90,height:90,borderRadius:"50%",background:M.tertiary,opacity:.12}}/>
-        <div style={{fontSize:12,color:M.onPrimaryContainer,fontFamily:FONT,fontWeight:600,opacity:.7,marginBottom:6}}>Sunday · March 29</div>
-        <div style={{fontSize:30,fontWeight:900,color:M.onPrimaryContainer,fontFamily:FONT,letterSpacing:"-.5px",lineHeight:1.2}}>Good morning,<br/>Daddy 💪</div>
+        <div style={{fontSize:12,color:M.onPrimaryContainer,fontFamily:FONT,fontWeight:600,opacity:.7,marginBottom:6}}>{dayName} · {dateLabel}</div>
+        <div style={{fontSize:30,fontWeight:900,color:M.onPrimaryContainer,fontFamily:FONT,letterSpacing:"-.5px",lineHeight:1.2}}>{greeting},<br/>{firstName} 💪</div>
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
         {[{icon:"🔥",val:"12",unit:"streak",bg:M.tertiaryContainer,fg:M.onTertiaryContainer},{icon:"📅",val:"4",unit:"this week",bg:M.primaryContainer,fg:M.onPrimaryContainer},{icon:"🏆",val:"7",unit:"PRs",bg:M.secondaryContainer,fg:M.onSecondaryContainer}].map(s=>(
@@ -814,6 +815,8 @@ const NAV=[
 export default function FittyApp(){
   useCSS();
   const [loggedIn,setLoggedIn]=useState(false);
+  const [userName,setUserName]=useState("");
+  const [userAvatar,setUserAvatar]=useState("");
   const [screen,setScreen]=useState("home");
   const [activeNav,setActiveNav]=useState("home");
   const [routine,setRoutine]=useState<Routine|null>(null);
@@ -822,10 +825,23 @@ export default function FittyApp(){
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
-      if(session)setLoggedIn(true);
+      if(session){
+        setLoggedIn(true);
+        const meta=session.user.user_metadata;
+        setUserName(meta.full_name||meta.name||session.user.email?.split("@")[0]||"");
+        setUserAvatar(meta.avatar_url||meta.picture||"");
+      }
     });
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
-      if(session)setLoggedIn(true);
+      if(session){
+        setLoggedIn(true);
+        const meta=session.user.user_metadata;
+        setUserName(meta.full_name||meta.name||session.user.email?.split("@")[0]||"");
+        setUserAvatar(meta.avatar_url||meta.picture||"");
+      }else{
+        setLoggedIn(false);
+        setUserName("");setUserAvatar("");
+      }
     });
     return()=>subscription.unsubscribe();
   },[]);
@@ -836,7 +852,10 @@ export default function FittyApp(){
   };
   const nav=(id:string)=>{setActiveNav(id);setScreen(id==="workout"?"routines":id);};
 
-  if(!loggedIn)return <LoginScreen onLogin={()=>setLoggedIn(true)}/>;
+  const firstName=userName.split(" ")[0]||"there";
+  const avatarInitial=firstName[0]?.toUpperCase()||"?";
+
+  if(!loggedIn)return <LoginScreen/>;
 
   return(
     <div style={{fontFamily:FONT,background:M.background,color:M.onSurface,minHeight:"100vh",display:"flex",justifyContent:"center",WebkitFontSmoothing:"antialiased"}}>
@@ -855,11 +874,14 @@ export default function FittyApp(){
               <button className="m3i" style={{width:42,height:42,background:"transparent",color:M.onSurfaceVariant}}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
               </button>
-              <div style={{width:40,height:40,borderRadius:50,background:M.primaryContainer,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:M.onPrimaryContainer,fontFamily:FONT}}>D</div>
+              {userAvatar
+                ?<img src={userAvatar} alt={firstName} style={{width:40,height:40,borderRadius:50,objectFit:"cover"}}/>
+                :<div style={{width:40,height:40,borderRadius:50,background:M.primaryContainer,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:M.onPrimaryContainer,fontFamily:FONT}}>{avatarInitial}</div>
+              }
             </div>
           </div>
         )}
-        {screen==="home"&&<HomeScreen onStartWorkout={()=>{setScreen("routines");setActiveNav("workout");}} onOpenCalendar={()=>setCalendarOpen(true)}/>}
+        {screen==="home"&&<HomeScreen onStartWorkout={()=>{setScreen("routines");setActiveNav("workout");}} onOpenCalendar={()=>setCalendarOpen(true)} firstName={firstName}/>}
         {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setRoutine(r);setScreen("active");setActiveNav("workout");}}/>}
         {screen==="active"&&routine&&<ActiveScreen routine={routine} onFinish={()=>finishWorkout(routine)} onBack={()=>setScreen("routines")}/>}
         {["running","progress","profile"].includes(screen)&&(
