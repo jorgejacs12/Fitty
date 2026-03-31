@@ -1,4 +1,4 @@
-import { useState, useEffect, type JSX } from "react";
+import { useState, useEffect, useMemo, type JSX } from "react";
 import { supabase } from "./lib/supabase";
 
 const M = {
@@ -517,8 +517,52 @@ function SetBurst({show}:{show:boolean}){
 
 interface SetRow { weight:number; reps:number; done:boolean; }
 interface ActiveExercise extends Exercise { rows:SetRow[]; }
+interface WorkoutLog { id:string; routine_name:string; routine_emoji:string; completed_at:string; duration_seconds:number; total_sets:number; total_volume_kg:number; xp_earned:number; }
+interface Run { id:string; distance_miles:number; duration_seconds:number; ran_at:string; notes:string; }
 
-function ActiveScreen({routine,onFinish,onBack}:{routine:Routine;onFinish:()=>void;onBack:()=>void}){
+async function dbSaveWorkout(userId:string,routine:Routine,exercises:ActiveExercise[],durationSec:number){
+  const totalSets=exercises.reduce((a,e)=>a+e.rows.filter(r=>r.done).length,0);
+  const totalVol=exercises.reduce((a,e)=>a+e.rows.filter(r=>r.done).reduce((b,r)=>b+r.weight*r.reps,0),0);
+  const xp=totalSets*10;
+  const {data:w,error}=await supabase.from("workouts").insert({user_id:userId,routine_name:routine.name,routine_emoji:routine.emoji,duration_seconds:durationSec,total_sets:totalSets,total_volume_kg:totalVol,xp_earned:xp}).select().single();
+  if(error||!w)return;
+  const rows=exercises.map(ex=>({workout_id:w.id,exercise_name:ex.name,sets_json:ex.rows.filter(r=>r.done)}));
+  if(rows.length)await supabase.from("workout_exercises").insert(rows);
+}
+async function dbLoadWorkouts(userId:string):Promise<WorkoutLog[]>{
+  const {data}=await supabase.from("workouts").select("*").eq("user_id",userId).order("completed_at",{ascending:false}).limit(50);
+  return(data||[]) as WorkoutLog[];
+}
+async function dbSaveRun(userId:string,distanceMiles:number,durationSeconds:number,notes:string){
+  await supabase.from("runs").insert({user_id:userId,distance_miles:distanceMiles,duration_seconds:durationSeconds,notes});
+}
+async function dbLoadRuns(userId:string):Promise<Run[]>{
+  const {data}=await supabase.from("runs").select("*").eq("user_id",userId).order("ran_at",{ascending:false}).limit(50);
+  return(data||[]) as Run[];
+}
+function fmtPace(distMi:number,durSec:number):string{
+  if(!distMi||!durSec)return"—";
+  const pps=durSec/distMi;const m=Math.floor(pps/60),s=Math.round(pps%60);
+  return`${m}:${String(s).padStart(2,"0")}/mi`;
+}
+function fmtDur(sec:number):string{
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  if(h>0)return`${h}h ${m}m`;if(m>0)return`${m}m ${s}s`;return`${s}s`;
+}
+function computeStreak(logs:WorkoutLog[],runs:Run[]):number{
+  const days=new Set<string>();
+  logs.forEach(w=>days.add(w.completed_at.slice(0,10)));
+  runs.forEach(r=>days.add(r.ran_at.slice(0,10)));
+  let streak=0;const d=new Date();
+  for(let i=0;i<365;i++){
+    const key=d.toISOString().slice(0,10);
+    if(days.has(key)){streak++;d.setDate(d.getDate()-1);}else break;
+  }
+  return streak;
+}
+
+function ActiveScreen({routine,onFinish,onBack}:{routine:Routine;onFinish:(exercises:ActiveExercise[],durationSec:number)=>void;onBack:()=>void}){
+  const [startTime]=useState(()=>Date.now());
   const [exercises,setExercises]=useState<ActiveExercise[]>(()=>routine.exercises.map(ex=>({...ex,rows:Array.from({length:ex.sets},(_,i)=>({weight:70-i*2.5,reps:parseInt(ex.reps)||10,done:false}))})));
   const [swapIdx,setSwapIdx]=useState<number|null>(null);
   const [swapped,setSwapped]=useState<Record<number,boolean>>({});
@@ -545,7 +589,7 @@ function ActiveScreen({routine,onFinish,onBack}:{routine:Routine;onFinish:()=>vo
             <div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT,letterSpacing:"-.3px"}}>{routine.emoji} {routine.name}</div>
             <div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:1}}>{done}/{total} sets · +{done*10} XP</div>
           </div>
-          <button onClick={onFinish} className="m3b" style={{background:M.primary,color:M.onPrimary,borderRadius:100,padding:"10px 20px",fontWeight:700,fontSize:13,fontFamily:FONT,marginRight:8}}>Finish ✓</button>
+          <button onClick={()=>onFinish(exercises,Math.round((Date.now()-startTime)/1000))} className="m3b" style={{background:M.primary,color:M.onPrimary,borderRadius:100,padding:"10px 20px",fontWeight:700,fontSize:13,fontFamily:FONT,marginRight:8}}>Finish ✓</button>
         </div>
         <div style={{height:4,background:M.surfaceContainerHighest}}>
           <div className="ease" style={{height:"100%",width:`${pct}%`,background:M.primary,borderRadius:"0 3px 3px 0"}}/>
@@ -602,6 +646,234 @@ function ActiveScreen({routine,onFinish,onBack}:{routine:Routine;onFinish:()=>vo
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={M.onTertiaryContainer} strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VolumeChart({logs}:{logs:WorkoutLog[]}){
+  const weeks=useMemo(()=>{
+    const out:number[]=Array(8).fill(0);const now=new Date();
+    logs.forEach(w=>{const d=Math.floor((now.getTime()-new Date(w.completed_at).getTime())/(7*24*3600*1000));if(d>=0&&d<8)out[7-d]+=w.total_volume_kg;});
+    return out;
+  },[logs]);
+  const max=Math.max(...weeks,1);
+  const labels=Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(7-i)*7);return d.toLocaleDateString("en-US",{month:"numeric",day:"numeric"});});
+  return(
+    <div style={{background:M.surfaceContainerHighest,borderRadius:24,padding:"20px 16px 12px",marginBottom:16}}>
+      <div style={{fontSize:11,fontWeight:700,color:M.onSurfaceVariant,fontFamily:FONT,letterSpacing:".8px",textTransform:"uppercase",marginBottom:12}}>Weekly Volume (kg)</div>
+      <div style={{display:"flex",gap:4,alignItems:"flex-end",height:80}}>
+        {weeks.map((v,i)=>(
+          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}>
+            <div style={{width:"100%",background:v>0?M.primary:M.surfaceContainer,borderRadius:"4px 4px 0 0",height:v>0?Math.max(6,(v/max)*72):4,transition:"height .5s cubic-bezier(.34,1.56,.64,1)"}}/>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:4,marginTop:6}}>
+        {labels.map((l,i)=>(
+          <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:M.onSurfaceVariant,fontFamily:FONT}}>{l}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RunningScreen({userId,runs,onRunSaved}:{userId:string;runs:Run[];onRunSaved:()=>void}){
+  const [sheetOpen,setSheetOpen]=useState(false);
+  const [dist,setDist]=useState(3.0);
+  const [minutes,setMinutes]=useState(30);
+  const [seconds,setSeconds]=useState(0);
+  const [notes,setNotes]=useState("");
+  const [saving,setSaving]=useState(false);
+  const totalMiles=useMemo(()=>runs.reduce((a,r)=>a+r.distance_miles,0),[runs]);
+  const thisWeekMiles=useMemo(()=>{const c=new Date();c.setDate(c.getDate()-7);return runs.filter(r=>new Date(r.ran_at)>=c).reduce((a,r)=>a+r.distance_miles,0);},[runs]);
+  const bestPace=useMemo(()=>{if(!runs.length)return"—";let best=Infinity;runs.forEach(r=>{if(r.distance_miles>0){const p=r.duration_seconds/r.distance_miles;if(p<best)best=p;}});if(!isFinite(best))return"—";const m=Math.floor(best/60),s=Math.round(best%60);return`${m}:${String(s).padStart(2,"0")}/mi`;},[runs]);
+  const saveRun=async()=>{
+    const durSec=minutes*60+seconds;
+    if(!dist||!durSec)return;
+    setSaving(true);
+    await dbSaveRun(userId,dist,durSec,notes);
+    setSaving(false);setSheetOpen(false);setNotes("");setDist(3.0);setMinutes(30);setSeconds(0);
+    onRunSaved();
+  };
+  return(
+    <div style={{padding:"0 16px 100px",animation:"heroIn .55s cubic-bezier(.2,0,0,1)"}}>
+      <div style={{fontSize:34,fontWeight:900,color:M.onSurface,fontFamily:FONT,letterSpacing:"-.6px",lineHeight:1.1,padding:"4px 4px 16px"}}>Running</div>
+      <div style={{display:"flex",gap:10,marginBottom:16}}>
+        {[{icon:"🏃",val:totalMiles.toFixed(1),unit:"total mi",bg:M.primaryContainer,fg:M.onPrimaryContainer},{icon:"📅",val:thisWeekMiles.toFixed(1),unit:"this week",bg:M.secondaryContainer,fg:M.onSecondaryContainer},{icon:"⚡",val:bestPace,unit:"best pace",bg:M.tertiaryContainer,fg:M.onTertiaryContainer}].map(s=>(
+          <div key={s.unit} style={{background:s.bg,borderRadius:20,padding:"12px",flex:1,display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
+            <span style={{fontSize:20}}>{s.icon}</span>
+            <div style={{fontSize:16,fontWeight:900,color:s.fg,fontFamily:FONT,lineHeight:1,textAlign:"center"}}>{s.val}</div>
+            <div style={{fontSize:9,color:s.fg,opacity:.75,fontFamily:FONT,textAlign:"center"}}>{s.unit}</div>
+          </div>
+        ))}
+      </div>
+      <button onClick={()=>setSheetOpen(true)} className="m3b" style={{width:"100%",background:M.primary,color:M.onPrimary,borderRadius:20,padding:"18px",fontFamily:FONT,fontWeight:800,fontSize:15,display:"flex",alignItems:"center",gap:12,justifyContent:"center",marginBottom:20}}>
+        <span style={{fontSize:22}}>+</span> Log a Run
+      </button>
+      {runs.length===0&&(
+        <div style={{textAlign:"center",padding:"48px 0",color:M.onSurfaceVariant,fontFamily:FONT}}>
+          <div style={{fontSize:48,marginBottom:12}}>🏃</div>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>No runs yet</div>
+          <div style={{fontSize:13}}>Tap above to log your first run</div>
+        </div>
+      )}
+      {runs.map((r,i)=>{
+        const pace=fmtPace(r.distance_miles,r.duration_seconds);
+        const date=new Date(r.ran_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+        return(
+          <div key={r.id} style={{background:M.surfaceContainerHighest,borderRadius:24,padding:"16px 20px",marginBottom:10,animation:`stagger .25s ${i*50}ms both`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:r.notes?8:0}}>
+              <div>
+                <div style={{fontSize:18,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{r.distance_miles.toFixed(2)} mi</div>
+                <div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:2}}>{date}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:14,fontWeight:700,color:M.primary,fontFamily:FONT}}>{pace}</div>
+                <div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:2}}>{fmtDur(r.duration_seconds)}</div>
+              </div>
+            </div>
+            {r.notes&&<div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT,fontStyle:"italic"}}>{r.notes}</div>}
+          </div>
+        );
+      })}
+      {sheetOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)setSheetOpen(false);}}>
+          <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",padding:"0 0 48px",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div className="sheet-handle"/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px 12px"}}>
+              <div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>Log a Run</div>
+              <button onClick={()=>setSheetOpen(false)} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
+            </div>
+            <div style={{padding:"0 20px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:M.onSurfaceVariant,letterSpacing:".8px",textTransform:"uppercase",marginBottom:8,fontFamily:FONT}}>Distance (miles)</div>
+              <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
+                <button onClick={()=>setDist(d=>Math.max(.1,Math.round((d-.1)*10)/10))} className="m3i" style={{width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurface,fontSize:24,fontWeight:700}}>−</button>
+                <div style={{flex:1,textAlign:"center",fontSize:40,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{dist.toFixed(1)}</div>
+                <button onClick={()=>setDist(d=>Math.round((d+.1)*10)/10)} className="m3i" style={{width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurface,fontSize:24,fontWeight:700}}>+</button>
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:M.onSurfaceVariant,letterSpacing:".8px",textTransform:"uppercase",marginBottom:8,fontFamily:FONT}}>Duration</div>
+              <div style={{display:"flex",gap:12,marginBottom:8}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,color:M.onSurfaceVariant,fontFamily:FONT,marginBottom:4,textAlign:"center"}}>Minutes</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>setMinutes(m=>Math.max(0,m-1))} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurface,fontSize:18}}>−</button>
+                    <div style={{flex:1,textAlign:"center",fontSize:26,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{minutes}</div>
+                    <button onClick={()=>setMinutes(m=>m+1)} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurface,fontSize:18}}>+</button>
+                  </div>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,color:M.onSurfaceVariant,fontFamily:FONT,marginBottom:4,textAlign:"center"}}>Seconds</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>setSeconds(s=>Math.max(0,s-1))} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurface,fontSize:18}}>−</button>
+                    <div style={{flex:1,textAlign:"center",fontSize:26,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{String(seconds).padStart(2,"0")}</div>
+                    <button onClick={()=>setSeconds(s=>Math.min(59,s+1))} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurface,fontSize:18}}>+</button>
+                  </div>
+                </div>
+              </div>
+              <div style={{fontSize:12,color:M.primary,fontWeight:700,fontFamily:FONT,textAlign:"center",marginBottom:16}}>Pace: {fmtPace(dist,minutes*60+seconds)}</div>
+              <div style={{marginBottom:16}}>
+                <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Notes (optional)" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:16,padding:"14px 16px",fontFamily:FONT,fontSize:14,color:M.onSurface,outline:"none"}}/>
+              </div>
+              <button onClick={saveRun} disabled={saving} className="m3b" style={{width:"100%",background:M.primary,color:M.onPrimary,borderRadius:20,padding:16,fontWeight:800,fontSize:15,fontFamily:FONT,opacity:saving?.6:1}}>
+                {saving?"Saving...":"Save Run"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProgressScreen({logs,runs}:{logs:WorkoutLog[];runs:Run[]}){
+  const streak=useMemo(()=>computeStreak(logs,runs),[logs,runs]);
+  const totalXP=useMemo(()=>logs.reduce((a,w)=>a+w.xp_earned,0),[logs]);
+  const totalVol=useMemo(()=>logs.reduce((a,w)=>a+w.total_volume_kg,0),[logs]);
+  const totalMiles=useMemo(()=>runs.reduce((a,r)=>a+r.distance_miles,0),[runs]);
+  return(
+    <div style={{padding:"0 16px 100px",animation:"heroIn .55s cubic-bezier(.2,0,0,1)"}}>
+      <div style={{fontSize:34,fontWeight:900,color:M.onSurface,fontFamily:FONT,letterSpacing:"-.6px",lineHeight:1.1,padding:"4px 4px 16px"}}>Progress</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        {[{icon:"🔥",val:String(streak),unit:"day streak",bg:M.tertiaryContainer,fg:M.onTertiaryContainer},{icon:"⚡",val:String(totalXP),unit:"total XP",bg:M.primaryContainer,fg:M.onPrimaryContainer},{icon:"🏋️",val:String(logs.length),unit:"workouts",bg:M.secondaryContainer,fg:M.onSecondaryContainer},{icon:"🏃",val:totalMiles.toFixed(1),unit:"miles run",bg:"#BBDEFB",fg:"#0D47A1"}].map(s=>(
+          <div key={s.unit} style={{background:s.bg,borderRadius:20,padding:"16px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:24}}>{s.icon}</span>
+            <div><div style={{fontSize:22,fontWeight:900,color:s.fg,fontFamily:FONT,lineHeight:1}}>{s.val}</div><div style={{fontSize:11,color:s.fg,opacity:.75,fontFamily:FONT,marginTop:1}}>{s.unit}</div></div>
+          </div>
+        ))}
+      </div>
+      <VolumeChart logs={logs}/>
+      <div style={{background:M.surfaceContainerHighest,borderRadius:24,padding:"16px 20px",marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,color:M.onSurfaceVariant,fontFamily:FONT,letterSpacing:".8px",textTransform:"uppercase",marginBottom:8}}>Total Volume Lifted</div>
+        <div style={{fontSize:32,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{totalVol.toFixed(0)} <span style={{fontSize:16,fontWeight:600,color:M.onSurfaceVariant}}>kg</span></div>
+      </div>
+      {logs.length===0&&(
+        <div style={{textAlign:"center",padding:"32px 0",color:M.onSurfaceVariant,fontFamily:FONT}}>
+          <div style={{fontSize:48,marginBottom:12}}>📊</div>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>No data yet</div>
+          <div style={{fontSize:13}}>Complete a workout to see your progress</div>
+        </div>
+      )}
+      {logs.slice(0,8).map((w,i)=>{
+        const date=new Date(w.completed_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+        return(
+          <div key={w.id} style={{background:M.surfaceContainerHighest,borderRadius:20,padding:"14px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",animation:`stagger .25s ${i*50}ms both`}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:800,color:M.onSurface,fontFamily:FONT}}>{w.routine_emoji} {w.routine_name}</div>
+              <div style={{fontSize:11,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:2}}>{date} · {w.total_sets} sets · {fmtDur(w.duration_seconds)}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:13,fontWeight:700,color:M.primary,fontFamily:FONT}}>+{w.xp_earned} XP</div>
+              <div style={{fontSize:11,color:M.onSurfaceVariant,fontFamily:FONT}}>{w.total_volume_kg.toFixed(0)} kg</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProfileScreen({userName,userAvatar,userEmail,logs,runs}:{userName:string;userAvatar:string;userEmail:string;logs:WorkoutLog[];runs:Run[]}){
+  const firstName=userName.split(" ")[0]||"Athlete";
+  const avatarInitial=firstName[0]?.toUpperCase()||"A";
+  const streak=useMemo(()=>computeStreak(logs,runs),[logs,runs]);
+  const totalXP=useMemo(()=>logs.reduce((a,w)=>a+w.xp_earned,0),[logs]);
+  const totalMiles=useMemo(()=>runs.reduce((a,r)=>a+r.distance_miles,0),[runs]);
+  const totalVol=useMemo(()=>logs.reduce((a,w)=>a+w.total_volume_kg,0),[logs]);
+  const totalTime=useMemo(()=>logs.reduce((a,w)=>a+w.duration_seconds,0),[logs]);
+  const handleSignOut=async()=>{await supabase.auth.signOut();};
+  return(
+    <div style={{padding:"0 16px 100px",animation:"heroIn .55s cubic-bezier(.2,0,0,1)"}}>
+      <div style={{background:M.primaryContainer,borderRadius:28,padding:"28px 24px",marginBottom:16,display:"flex",alignItems:"center",gap:16}}>
+        {userAvatar
+          ?<img src={userAvatar} alt={firstName} style={{width:72,height:72,borderRadius:50,objectFit:"cover",flexShrink:0}}/>
+          :<div style={{width:72,height:72,borderRadius:50,background:M.primary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:900,color:M.onPrimary,fontFamily:FONT,flexShrink:0}}>{avatarInitial}</div>
+        }
+        <div>
+          <div style={{fontSize:22,fontWeight:900,color:M.onPrimaryContainer,fontFamily:FONT,letterSpacing:"-.3px"}}>{userName||"Athlete"}</div>
+          {userEmail&&<div style={{fontSize:13,color:M.onPrimaryContainer,opacity:.75,fontFamily:FONT,marginTop:2}}>{userEmail}</div>}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+        {[{icon:"🔥",val:String(streak),unit:"streak"},{icon:"⚡",val:String(totalXP),unit:"total XP"},{icon:"🏃",val:totalMiles.toFixed(0),unit:"miles"}].map(s=>(
+          <div key={s.unit} style={{background:M.surfaceContainerHighest,borderRadius:20,padding:"16px 12px",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <span style={{fontSize:22}}>{s.icon}</span>
+            <div style={{fontSize:20,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{s.val}</div>
+            <div style={{fontSize:11,color:M.onSurfaceVariant,fontFamily:FONT}}>{s.unit}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{background:M.surfaceContainerHighest,borderRadius:24,marginBottom:16,overflow:"hidden"}}>
+        {[{icon:"🏋️",label:"Total workouts",val:String(logs.length)},{icon:"📊",label:"Total volume",val:`${totalVol.toFixed(0)} kg`},{icon:"⏱",label:"Time trained",val:fmtDur(totalTime)}].map((row,i)=>(
+          <div key={row.label} style={{display:"flex",alignItems:"center",padding:"16px 20px",borderBottom:i<2?`1px solid ${M.surface}`:"none"}}>
+            <span style={{fontSize:20,marginRight:12}}>{row.icon}</span>
+            <div style={{flex:1,fontSize:14,fontWeight:600,color:M.onSurface,fontFamily:FONT}}>{row.label}</div>
+            <div style={{fontSize:14,fontWeight:700,color:M.primary,fontFamily:FONT}}>{row.val}</div>
+          </div>
+        ))}
+      </div>
+      <button onClick={handleSignOut} className="m3b" style={{width:"100%",background:M.errorContainer,color:M.error,borderRadius:20,padding:16,fontWeight:800,fontSize:15,fontFamily:FONT}}>
+        Sign Out
+      </button>
     </div>
   );
 }
@@ -817,38 +1089,51 @@ export default function FittyApp(){
   const [loggedIn,setLoggedIn]=useState(false);
   const [userName,setUserName]=useState("");
   const [userAvatar,setUserAvatar]=useState("");
+  const [userEmail,setUserEmail]=useState("");
+  const [userId,setUserId]=useState("");
   const [screen,setScreen]=useState("home");
   const [activeNav,setActiveNav]=useState("home");
   const [routine,setRoutine]=useState<Routine|null>(null);
   const [routines,setRoutines]=useState<Routine[]>(INIT);
   const [calendarOpen,setCalendarOpen]=useState(false);
+  const [workoutLogs,setWorkoutLogs]=useState<WorkoutLog[]>([]);
+  const [runs,setRuns]=useState<Run[]>([]);
 
   useEffect(()=>{
+    const load=(uid:string)=>{dbLoadWorkouts(uid).then(setWorkoutLogs);dbLoadRuns(uid).then(setRuns);};
     supabase.auth.getSession().then(({data:{session}})=>{
       if(session){
-        setLoggedIn(true);
+        const uid=session.user.id;
+        setLoggedIn(true);setUserId(uid);
         const meta=session.user.user_metadata;
         setUserName(meta.full_name||meta.name||session.user.email?.split("@")[0]||"");
         setUserAvatar(meta.avatar_url||meta.picture||"");
+        setUserEmail(session.user.email||"");
+        load(uid);
       }
     });
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
       if(session){
-        setLoggedIn(true);
+        const uid=session.user.id;
+        setLoggedIn(true);setUserId(uid);
         const meta=session.user.user_metadata;
         setUserName(meta.full_name||meta.name||session.user.email?.split("@")[0]||"");
         setUserAvatar(meta.avatar_url||meta.picture||"");
+        setUserEmail(session.user.email||"");
+        load(uid);
       }else{
         setLoggedIn(false);
-        setUserName("");setUserAvatar("");
+        setUserName("");setUserAvatar("");setUserEmail("");setUserId("");
+        setWorkoutLogs([]);setRuns([]);
       }
     });
     return()=>subscription.unsubscribe();
   },[]);
 
-  const finishWorkout=(r:Routine)=>{
+  const finishWorkout=async(r:Routine,exercises:ActiveExercise[],durationSec:number)=>{
     setRoutines(p=>{const u=p.map(rt=>rt.id===r.id?{...rt,lastDone:"Today",daysAgo:0}:rt);return[...u].sort((a,b)=>{if(a.daysAgo===0&&b.daysAgo!==0)return 1;if(b.daysAgo===0&&a.daysAgo!==0)return-1;return b.daysAgo-a.daysAgo;});});
-    setScreen("routines");
+    setScreen("home");setActiveNav("home");
+    if(userId){await dbSaveWorkout(userId,r,exercises,durationSec);dbLoadWorkouts(userId).then(setWorkoutLogs);}
   };
   const nav=(id:string)=>{setActiveNav(id);setScreen(id==="workout"?"routines":id);};
 
@@ -883,16 +1168,10 @@ export default function FittyApp(){
         )}
         {screen==="home"&&<HomeScreen onStartWorkout={()=>{setScreen("routines");setActiveNav("workout");}} onOpenCalendar={()=>setCalendarOpen(true)} firstName={firstName}/>}
         {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setRoutine(r);setScreen("active");setActiveNav("workout");}}/>}
-        {screen==="active"&&routine&&<ActiveScreen routine={routine} onFinish={()=>finishWorkout(routine)} onBack={()=>setScreen("routines")}/>}
-        {["running","progress","profile"].includes(screen)&&(
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:420,gap:16,animation:"heroIn .5s cubic-bezier(.2,0,0,1)"}}>
-            <div style={{width:80,height:80,borderRadius:28,background:M.primaryContainer,display:"flex",alignItems:"center",justifyContent:"center",fontSize:36}}>
-              {screen==="running"?"🏃":screen==="progress"?"📊":"👤"}
-            </div>
-            <div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{screen.charAt(0).toUpperCase()+screen.slice(1)}</div>
-            <div style={{fontSize:14,color:M.onSurfaceVariant,fontFamily:FONT}}>Coming in the full build</div>
-          </div>
-        )}
+        {screen==="active"&&routine&&<ActiveScreen routine={routine} onFinish={(exs,dur)=>finishWorkout(routine,exs,dur)} onBack={()=>setScreen("routines")}/>}
+        {screen==="running"&&<RunningScreen userId={userId} runs={runs} onRunSaved={()=>dbLoadRuns(userId).then(setRuns)}/>}
+        {screen==="progress"&&<ProgressScreen logs={workoutLogs} runs={runs}/>}
+        {screen==="profile"&&<ProfileScreen userName={userName} userAvatar={userAvatar} userEmail={userEmail} logs={workoutLogs} runs={runs}/>}
         <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:M.surfaceContainer,borderTop:`1px solid ${M.outlineVariant}`,display:"flex",zIndex:50,paddingBottom:8}}>
           {NAV.map(item=>{const a=activeNav===item.id;return(
             <button key={item.id} onClick={()=>nav(item.id)} className="m3b" style={{flex:1,background:"transparent",display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"12px 0 4px"}}>
