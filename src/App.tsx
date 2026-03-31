@@ -234,7 +234,7 @@ function LoginScreen(){
     setErr(null);
     const {error}=await supabase.auth.signInWithOAuth({
       provider:"google",
-      options:{redirectTo:window.location.origin}
+      options:{redirectTo:import.meta.env.VITE_SITE_URL||window.location.origin}
     });
     if(error){setErr(error.message);setLoading(false);}
     // On success the browser redirects away — no further action needed here
