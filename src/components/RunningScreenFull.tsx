@@ -65,20 +65,23 @@ function todayISO(): string {
 
 function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.Element {
   const [runDate, setRunDate] = useState(editRun ? editRun.ran_at.slice(0, 10) : todayISO());
-  const [dist, setDist] = useState(editRun ? (distanceUnit === "km" ? editRun.distance_miles * 1.60934 : editRun.distance_miles) : 3.0);
-  const [minutes, setMinutes] = useState(editRun ? Math.floor(editRun.duration_seconds / 60) : 30);
-  const [seconds, setSeconds] = useState(editRun ? editRun.duration_seconds % 60 : 0);
+  const initDist = editRun ? (distanceUnit === "km" ? editRun.distance_miles * 1.60934 : editRun.distance_miles) : 0;
+  const [distStr, setDistStr] = useState(initDist > 0 ? String(initDist) : "");
+  const [dHours, setDHours] = useState(editRun ? Math.floor(editRun.duration_seconds / 3600) : 0);
+  const [dMins, setDMins] = useState(editRun ? Math.floor((editRun.duration_seconds % 3600) / 60) : 0);
+  const [dSecs, setDSecs] = useState(editRun ? editRun.duration_seconds % 60 : 0);
   const [notes, setNotes] = useState(editRun?.notes || "");
   const [route, setRoute] = useState(editRun?.route_name || "");
   const [hr, setHr] = useState(editRun?.heart_rate_avg ? String(editRun.heart_rate_avg) : "");
   const [saving, setSaving] = useState(false);
 
-  const durSec = minutes * 60 + seconds;
-  const distMi = distanceUnit === "km" ? dist / 1.60934 : dist;
+  const durSec = dHours * 3600 + dMins * 60 + dSecs;
+  const distVal = parseFloat(distStr) || 0;
+  const distMi = distanceUnit === "km" ? distVal / 1.60934 : distVal;
   const pace = fmtPace(distMi, durSec);
 
   const save = async () => {
-    if (!dist || !durSec) return;
+    if (!distVal || !durSec) return;
     setSaving(true);
     await onSave({
       distanceMiles: distMi,
@@ -90,6 +93,8 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
     });
     setSaving(false);
   };
+
+  const numFieldStyle = { width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 22, fontWeight: 900, color: M.onSurface, outline: "none", textAlign: "center" as const, boxSizing: "border-box" as const };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(28,27,31,.6)", backdropFilter: "blur(6px)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
@@ -111,26 +116,30 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
           <div style={{ fontSize: 11, fontWeight: 700, color: M.onSurfaceVariant, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 8, fontFamily: FONT }}>
             Distance ({distanceUnit})
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-            <button onClick={() => setDist(d => Math.max(0.1, Math.round((d - 0.1) * 10) / 10))} style={{ width: 44, height: 44, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 24, fontWeight: 700, cursor: "pointer" }}>−</button>
-            <div style={{ flex: 1, textAlign: "center", fontSize: 40, fontWeight: 900, color: M.onSurface, fontFamily: FONT }}>{dist.toFixed(1)}</div>
-            <button onClick={() => setDist(d => Math.round((d + 0.1) * 10) / 10)} style={{ width: 44, height: 44, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 24, fontWeight: 700, cursor: "pointer" }}>+</button>
+          <div style={{ marginBottom: 20 }}>
+            <input type="number" value={distStr} onChange={e => setDistStr(e.target.value)}
+              min={0} step={0.01} placeholder="0.00"
+              style={numFieldStyle} />
           </div>
           {/* Duration */}
           <div style={{ fontSize: 11, fontWeight: 700, color: M.onSurfaceVariant, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 8, fontFamily: FONT }}>Duration</div>
-          <div style={{ display: "flex", gap: 12, marginBottom: 4 }}>
-            {[{ label: "Minutes", val: minutes, set: setMinutes, max: 999 }, { label: "Seconds", val: seconds, set: setSeconds, max: 59 }].map(({ label, val, set, max }) => (
-              <div key={label} style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: M.onSurfaceVariant, fontFamily: FONT, marginBottom: 4, textAlign: "center" }}>{label}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => set((v: number) => Math.max(0, v - 1))} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, cursor: "pointer" }}>−</button>
-                  <div style={{ flex: 1, textAlign: "center", fontSize: 26, fontWeight: 900, color: M.onSurface, fontFamily: FONT }}>{String(val).padStart(label === "Seconds" ? 2 : 1, "0")}</div>
-                  <button onClick={() => set((v: number) => Math.min(max, v + 1))} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, cursor: "pointer" }}>+</button>
-                </div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
+            {([
+              { label: "hr",  val: dHours, set: setDHours, max: 23 },
+              { label: "min", val: dMins,  set: setDMins,  max: 59 },
+              { label: "sec", val: dSecs,  set: setDSecs,  max: 59 },
+            ] as { label: string; val: number; set: (v: number) => void; max: number }[]).map(({ label, val, set, max }) => (
+              <div key={label} style={{ flex: 1, textAlign: "center" }}>
+                <input type="number" value={val === 0 ? "" : val} onChange={e => {
+                  const n = Math.min(max, Math.max(0, parseInt(e.target.value) || 0));
+                  set(n);
+                }} min={0} max={max} placeholder="0"
+                  style={numFieldStyle} />
+                <div style={{ fontSize: 10, color: M.onSurfaceVariant, fontFamily: FONT, marginTop: 4 }}>{label}</div>
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 12, color: M.primary, fontWeight: 700, fontFamily: FONT, textAlign: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: M.primary, fontWeight: 700, fontFamily: FONT, textAlign: "center", marginBottom: 16, marginTop: 8 }}>
             Pace: {pace}
           </div>
           {/* Optional fields */}
