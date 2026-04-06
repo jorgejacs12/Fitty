@@ -53,12 +53,18 @@ interface SheetProps {
   distanceUnit: "mi" | "km";
   onSave: (fields: {
     distanceMiles: number; durationSeconds: number; notes: string;
-    routeName?: string; heartRateAvg?: number;
+    routeName?: string; heartRateAvg?: number; runDate: string;
   }) => Promise<void>;
   onClose: () => void;
 }
 
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.Element {
+  const [runDate, setRunDate] = useState(editRun ? editRun.ran_at.slice(0, 10) : todayISO());
   const [dist, setDist] = useState(editRun ? (distanceUnit === "km" ? editRun.distance_miles * 1.60934 : editRun.distance_miles) : 3.0);
   const [minutes, setMinutes] = useState(editRun ? Math.floor(editRun.duration_seconds / 60) : 30);
   const [seconds, setSeconds] = useState(editRun ? editRun.duration_seconds % 60 : 0);
@@ -80,6 +86,7 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
       notes,
       routeName: route || undefined,
       heartRateAvg: hr ? parseInt(hr) : undefined,
+      runDate,
     });
     setSaving(false);
   };
@@ -94,6 +101,12 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
           <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
         <div style={{ padding: "0 20px" }}>
+          {/* Date */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: M.onSurfaceVariant, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 8, fontFamily: FONT }}>Date</div>
+          <div style={{ marginBottom: 20 }}>
+            <input type="date" value={runDate} onChange={e => setRunDate(e.target.value)}
+              style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 15, color: M.onSurface, outline: "none", boxSizing: "border-box" }} />
+          </div>
           {/* Distance */}
           <div style={{ fontSize: 11, fontWeight: 700, color: M.onSurfaceVariant, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 8, fontFamily: FONT }}>
             Distance ({distanceUnit})
@@ -152,7 +165,7 @@ interface Props {
   distanceUnit: "mi" | "km";
   onSaveRun: (fields: {
     distanceMiles: number; durationSeconds: number; notes: string;
-    routeName?: string; heartRateAvg?: number;
+    routeName?: string; heartRateAvg?: number; runDate: string;
   }, editId?: string) => Promise<void>;
   onTargetPaceChange: (sec: number) => void;
 }
@@ -252,7 +265,7 @@ export function RunningScreenFull({
 
   const handleSave = async (fields: {
     distanceMiles: number; durationSeconds: number; notes: string;
-    routeName?: string; heartRateAvg?: number;
+    routeName?: string; heartRateAvg?: number; runDate: string;
   }) => {
     await onSaveRun(fields, editRun?.id);
     setSheetOpen(false);

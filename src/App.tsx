@@ -1197,7 +1197,7 @@ export default function FittyApp(){
     }
   };
 
-  const handleRunSaved=async(fields:{distanceMiles:number;durationSeconds:number;notes:string;routeName?:string;heartRateAvg?:number},editId?:string)=>{
+  const handleRunSaved=async(fields:{distanceMiles:number;durationSeconds:number;notes:string;routeName?:string;heartRateAvg?:number;runDate:string},editId?:string)=>{
     if(userId){
       if(editId){
         await dbUpdateRun(editId,{
@@ -1206,6 +1206,7 @@ export default function FittyApp(){
           notes:fields.notes,
           route_name:fields.routeName||undefined,
           heart_rate_avg:fields.heartRateAvg||undefined,
+          ran_at:fields.runDate,
         });
       }else{
         await safeInsert("runs",{
@@ -1215,6 +1216,7 @@ export default function FittyApp(){
           notes:fields.notes,
           route_name:fields.routeName||null,
           heart_rate_avg:fields.heartRateAvg||null,
+          ran_at:fields.runDate,
         });
       }
       dbLoadRunsFull(userId).then(setRuns);

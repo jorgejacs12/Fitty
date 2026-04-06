@@ -198,7 +198,7 @@ export async function dbSaveRunFull(
 
 export async function dbUpdateRun(
   runId: string,
-  fields: Partial<Pick<Run, "distance_miles" | "duration_seconds" | "notes" | "route_name" | "heart_rate_avg">>,
+  fields: Partial<Pick<Run, "distance_miles" | "duration_seconds" | "notes" | "route_name" | "heart_rate_avg" | "ran_at">>,
 ): Promise<void> {
   await supabase.from("runs").update(fields).eq("id", runId);
 }
