@@ -166,7 +166,7 @@ export function FatigueMap({ routineFatigue, surfaceContainerHighest="#E6E0EB", 
         {(["peak","high","moderate","fresh","none"] as const).map(k => (
           <div key={k} style={{ display:"flex", alignItems:"center", gap:4 }}>
             <div style={{ width:10, height:10, borderRadius:3, background: COLOR[k], border:"1px solid #ccc" }}/>
-            <span style={{ fontSize:9, color:onSurfaceVariant, fontFamily:FONT }}>{LABEL[k]}</span>
+            <span style={{ fontSize:11, color:onSurfaceVariant, fontFamily:FONT }}>{LABEL[k]}</span>
           </div>
         ))}
       </div>

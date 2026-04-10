@@ -173,13 +173,14 @@ export function BodyMetrics({ metrics, onSave }: Props): JSX.Element {
               <div style={{ fontSize: 10, fontWeight: 700, color: M.onSurfaceVariant, fontFamily: FONT, marginBottom: 4, textTransform: "uppercase", letterSpacing: ".6px" }}>{label}</div>
               <input
                 type="number"
+                inputMode="numeric"
                 value={val}
                 onChange={e => set(e.target.value)}
                 placeholder={placeholder}
                 style={{
                   width: "100%", background: M.surface, border: `1.5px solid ${M.outlineVariant}`,
                   borderRadius: 12, padding: "10px 14px",
-                  fontFamily: FONT, fontSize: 14, color: M.onSurface, outline: "none",
+                  fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none",
                 }}
               />
             </div>

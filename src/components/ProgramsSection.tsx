@@ -991,7 +991,7 @@ function DayDetail({
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 8px", flexShrink: 0 }}>
-        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={onBack} style={{ width: 44, height: 44, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           ←
         </button>
         <div>
@@ -1126,7 +1126,7 @@ function ProgramList({
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 12px", flexShrink: 0 }}>
-        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer" }}>
+        <button onClick={onBack} style={{ width: 44, height: 44, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           ←
         </button>
         <div style={{ fontSize: 20, fontWeight: 900, color: M.onSurface, fontFamily: FONT }}>Full Program</div>

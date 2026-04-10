@@ -52,11 +52,11 @@ export function PRSheet({
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(28,27,31,.55)",backdropFilter:"blur(6px)",zIndex:600,display:"flex",alignItems:"flex-end",justifyContent:"center" }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ width:"100%",maxWidth:430,background:surface,borderRadius:"28px 28px 0 0",maxHeight:"85vh",overflowY:"auto",animation:"slideUp .45s cubic-bezier(.34,1.56,.64,1)" }}>
+      <div style={{ width:"100%",maxWidth:430,background:surface,borderRadius:"28px 28px 0 0",maxHeight:"85dvh",overflowY:"auto",animation:"slideUp .45s cubic-bezier(.34,1.56,.64,1)" }}>
         <div className="sheet-handle"/>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px 8px" }}>
           <div style={{ fontSize:22,fontWeight:900,color:onSurface,fontFamily:FONT }}>🏆 Personal Records</div>
-          <button onClick={onClose} style={{ width:36,height:36,borderRadius:"50%",background:surfaceContainerHighest,border:"none",fontSize:18,color:onSurfaceVariant,cursor:"pointer" }}>✕</button>
+          <button onClick={onClose} style={{ width:44,height:44,borderRadius:"50%",background:surfaceContainerHighest,border:"none",fontSize:18,color:onSurfaceVariant,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>✕</button>
         </div>
 
         <div style={{ padding:"0 20px 48px" }}>

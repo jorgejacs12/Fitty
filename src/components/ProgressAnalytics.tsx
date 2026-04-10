@@ -137,7 +137,7 @@ function HeatmapCalendar({ logs, runs }: { logs: WorkoutLog[]; runs: Run[] }): J
         {/* Day labels */}
         <div style={{ display: "flex", flexDirection: "column", gap: 3, marginRight: 2 }}>
           {dayLabels.map(l => (
-            <div key={l} style={{ height: 11, display: "flex", alignItems: "center", fontSize: 8, color: M.onSurfaceVariant, fontFamily: FONT }}>{l}</div>
+            <div key={l} style={{ height: 11, display: "flex", alignItems: "center", fontSize: 10, color: M.onSurfaceVariant, fontFamily: FONT }}>{l}</div>
           ))}
         </div>
         {/* Grid */}
@@ -354,8 +354,8 @@ export function ProgressAnalytics({ logs, runs, workoutExercises, personalRecord
               <ResponsiveContainer width="100%" height={150}>
                 <LineChart data={strengthData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={M.outlineVariant} />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} />
-                  <YAxis tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} width={32} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} />
+                  <YAxis tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} width={32} />
                   <Tooltip content={<ChartTooltip />} />
                   <Line type="monotone" dataKey="weight" stroke={M.primary} strokeWidth={2.5} dot={{ fill: M.primary, r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>
@@ -376,8 +376,8 @@ export function ProgressAnalytics({ logs, runs, workoutExercises, personalRecord
             <ResponsiveContainer width="100%" height={150}>
               <BarChart data={volumeData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={M.outlineVariant} />
-                <XAxis dataKey="week" tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} />
-                <YAxis tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} width={36} />
+                <XAxis dataKey="week" tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} />
+                <YAxis tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} width={36} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="volume" fill={M.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -400,8 +400,8 @@ export function ProgressAnalytics({ logs, runs, workoutExercises, personalRecord
               <ResponsiveContainer width="100%" height={130}>
                 <LineChart data={oneRMData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={M.outlineVariant} />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} />
-                  <YAxis tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} width={36} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} />
+                  <YAxis tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} width={36} />
                   <Tooltip content={<ChartTooltip />} />
                   <Line type="monotone" dataKey="rm" stroke="#7B5EA7" strokeWidth={2.5} dot={{ fill: "#7B5EA7", r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>

@@ -58,7 +58,7 @@ export function CustomExerciseModal({ onSave, onClose }: Props): JSX.Element {
           <button
             onClick={onClose}
             style={{
-              width: 36, height: 36, borderRadius: "50%",
+              width: 44, height: 44, borderRadius: "50%",
               background: M.surfaceContainerHighest, border: "none",
               fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -79,7 +79,7 @@ export function CustomExerciseModal({ onSave, onClose }: Props): JSX.Element {
               style={{
                 width: "100%", background: M.surfaceContainerHighest,
                 border: "none", borderRadius: 14, padding: "12px 16px",
-                fontFamily: FONT, fontSize: 14, color: M.onSurface, outline: "none",
+                fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none",
               }}
             />
           </div>
@@ -95,7 +95,7 @@ export function CustomExerciseModal({ onSave, onClose }: Props): JSX.Element {
               style={{
                 width: "100%", background: M.surfaceContainerHighest,
                 border: "none", borderRadius: 14, padding: "12px 16px",
-                fontFamily: FONT, fontSize: 14, color: M.onSurface, outline: "none",
+                fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none",
               }}
             >
               {MUSCLE_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
@@ -113,7 +113,7 @@ export function CustomExerciseModal({ onSave, onClose }: Props): JSX.Element {
               style={{
                 width: "100%", background: M.surfaceContainerHighest,
                 border: "none", borderRadius: 14, padding: "12px 16px",
-                fontFamily: FONT, fontSize: 14, color: M.onSurface, outline: "none",
+                fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none",
               }}
             >
               {EQUIPMENT.map(eq => <option key={eq} value={eq}>{eq}</option>)}

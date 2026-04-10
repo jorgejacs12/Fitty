@@ -99,25 +99,25 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(28,27,31,.6)", backdropFilter: "blur(6px)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: "100%", maxWidth: 430, background: M.surface, borderRadius: "28px 28px 0 0", padding: "0 0 48px", maxHeight: "90vh", overflowY: "auto", animation: "slideUp .5s cubic-bezier(.34,1.56,.64,1)" }}>
+      <div style={{ width: "100%", maxWidth: 430, background: M.surface, borderRadius: "28px 28px 0 0", padding: "0 0 48px", maxHeight: "90dvh", overflowY: "auto", animation: "slideUp .5s cubic-bezier(.34,1.56,.64,1)" }}>
         <div style={{ width: 32, height: 4, background: "#CAC4D0", borderRadius: 2, margin: "10px auto 0" }} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px 12px" }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: M.onSurface, fontFamily: FONT }}>{editRun ? "Edit Run" : "Log a Run"}</div>
-          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <button onClick={onClose} style={{ width: 44, height: 44, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
         <div style={{ padding: "0 20px" }}>
           {/* Date */}
           <div style={{ fontSize: 11, fontWeight: 700, color: M.onSurfaceVariant, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 8, fontFamily: FONT }}>Date</div>
           <div style={{ marginBottom: 20 }}>
             <input type="date" value={runDate} onChange={e => setRunDate(e.target.value)}
-              style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 15, color: M.onSurface, outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none", boxSizing: "border-box" }} />
           </div>
           {/* Distance */}
           <div style={{ fontSize: 11, fontWeight: 700, color: M.onSurfaceVariant, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 8, fontFamily: FONT }}>
             Distance ({distanceUnit})
           </div>
           <div style={{ marginBottom: 20 }}>
-            <input type="number" value={distStr} onChange={e => setDistStr(e.target.value)}
+            <input type="number" inputMode="numeric" value={distStr} onChange={e => setDistStr(e.target.value)}
               min={0} step={0.01} placeholder="0.00"
               style={numFieldStyle} />
           </div>
@@ -130,7 +130,7 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
               { label: "sec", val: dSecs,  set: setDSecs,  max: 59 },
             ] as { label: string; val: number; set: (v: number) => void; max: number }[]).map(({ label, val, set, max }) => (
               <div key={label} style={{ flex: 1, textAlign: "center" }}>
-                <input type="number" value={val === 0 ? "" : val} onChange={e => {
+                <input type="number" inputMode="numeric" value={val === 0 ? "" : val} onChange={e => {
                   const n = Math.min(max, Math.max(0, parseInt(e.target.value) || 0));
                   set(n);
                 }} min={0} max={max} placeholder="0"
@@ -149,12 +149,12 @@ function RunSheet({ editRun, distanceUnit, onSave, onClose }: SheetProps): JSX.E
           ].map(({ label, val, set, placeholder, type }) => (
             <div key={label} style={{ marginBottom: 12 }}>
               <input value={val} onChange={e => set(e.target.value)} type={type} placeholder={label + ` — ${placeholder}`}
-                style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 14, color: M.onSurface, outline: "none" }} />
+                style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none" }} />
             </div>
           ))}
           <div style={{ marginBottom: 16 }}>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)" rows={2}
-              style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 14, color: M.onSurface, outline: "none", resize: "none" }} />
+              style={{ width: "100%", background: M.surfaceContainerHighest, border: "none", borderRadius: 14, padding: "12px 16px", fontFamily: FONT, fontSize: 16, color: M.onSurface, outline: "none", resize: "none" }} />
           </div>
           <button onClick={save} disabled={saving} style={{ width: "100%", background: M.primary, color: M.onPrimary, border: "none", borderRadius: 20, padding: 16, fontWeight: 800, fontSize: 15, fontFamily: FONT, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "Saving…" : editRun ? "Update Run" : "Save Run"}
@@ -297,7 +297,7 @@ export function RunningScreenFull({
           <div key={s.unit} style={{ background: s.bg, borderRadius: 20, padding: "12px", flex: 1, display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
             <span style={{ fontSize: 18 }}>{s.icon}</span>
             <div style={{ fontSize: 13, fontWeight: 900, color: s.fg, fontFamily: FONT, lineHeight: 1.1, textAlign: "center" }}>{s.val}</div>
-            <div style={{ fontSize: 9, color: s.fg, opacity: .75, fontFamily: FONT, textAlign: "center" }}>{s.unit}</div>
+            <div style={{ fontSize: 11, color: s.fg, opacity: .75, fontFamily: FONT, textAlign: "center" }}>{s.unit}</div>
           </div>
         ))}
       </div>
@@ -333,8 +333,8 @@ export function RunningScreenFull({
             <ResponsiveContainer width="100%" height={120}>
               <BarChart data={weeklyMileageData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={M.outlineVariant} />
-                <XAxis dataKey="week" tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} />
-                <YAxis tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} width={30} />
+                <XAxis dataKey="week" tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} />
+                <YAxis tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} width={30} />
                 <Tooltip content={<ChartTip />} />
                 <Bar dataKey="miles" fill="#0D47A1" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -348,8 +348,8 @@ export function RunningScreenFull({
             <ResponsiveContainer width="100%" height={110}>
               <LineChart data={paceTrendData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={M.outlineVariant} />
-                <XAxis dataKey="week" tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} />
-                <YAxis tick={{ fontSize: 9, fill: M.onSurfaceVariant, fontFamily: FONT }} width={32} domain={["auto", "auto"]} reversed />
+                <XAxis dataKey="week" tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} />
+                <YAxis tick={{ fontSize: 10, fill: M.onSurfaceVariant, fontFamily: FONT }} width={32} domain={["auto", "auto"]} reversed />
                 <Tooltip content={<ChartTip />} />
                 <Line type="monotone" dataKey="pace" stroke={M.primary} strokeWidth={2} dot={{ fill: M.primary, r: 2 }} connectNulls />
               </LineChart>

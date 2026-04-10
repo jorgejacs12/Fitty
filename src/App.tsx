@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useRegisterSW } from "virtual:pwa-register/react";
 import { supabase } from "./lib/supabase";
 import { TigerLogo } from "./components/TigerLogo";
 import { TIGER_ANIMS, TIGER_CSS, getKey } from "./components/TigerAnimations";
@@ -375,11 +376,11 @@ function ExerciseModal({name,onClose}:{name:string;onClose:()=>void}){
   const breath=BREATHING[getKey(name)]||BREATHING.default;
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90vh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
         <div className="sheet-handle"/>
         <div style={{margin:"16px 20px 0",background:M.primaryContainer,borderRadius:24,padding:28,display:"flex",justifyContent:"center",position:"relative",minHeight:160}}>
           <div style={{width:144,height:144}}><A/></div>
-          <button onClick={onClose} className="m3i" style={{position:"absolute",top:12,right:12,width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
+          <button onClick={onClose} className="m3i" style={{position:"absolute",top:12,right:12,width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
         </div>
         <div style={{padding:"20px 20px 52px"}}>
           <div style={{fontSize:24,fontWeight:900,color:M.onSurface,fontFamily:FONT,letterSpacing:"-.4px",marginBottom:8}}>{name}</div>
@@ -414,11 +415,11 @@ function StretchModal({type,onClose}:{type:string;onClose:()=>void}){
   const sub=isBefore?"Do these before you start":"Take your time — you earned it";
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"80vh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
         <div className="sheet-handle"/>
         <div style={{padding:"16px 20px 8px",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div><div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>{title}</div><div style={{fontSize:13,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:2}}>{sub}</div></div>
-          <button onClick={onClose} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18,flexShrink:0}}>✕</button>
+          <button onClick={onClose} className="m3i" style={{width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18,flexShrink:0}}>✕</button>
         </div>
         <div style={{padding:"8px 20px 48px"}}>
           {list.map((s,i)=>(
@@ -440,16 +441,16 @@ function SwapDrawer({exerciseName,onSwap,onClose,allExercises}:{exerciseName:str
   const ms=(m:number)=>m>=95?{bg:M.greenContainer,fg:M.greenPrimary}:m>=85?{bg:M.primaryContainer,fg:M.onPrimaryContainer}:{bg:M.orangeContainer,fg:M.orangePrimary};
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"84vh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
         <div className="sheet-handle"/>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px 12px"}}>
           <div><div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>Replace Exercise</div><div style={{fontSize:13,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:2}}>Swapping <b style={{color:M.onSurface}}>{exerciseName}</b></div></div>
-          <button onClick={onClose} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
+          <button onClick={onClose} className="m3i" style={{width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
         </div>
         <div style={{padding:"0 20px 14px"}}>
           <div style={{position:"relative"}}>
             <svg style={{position:"absolute",left:18,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={M.onSurfaceVariant} strokeWidth="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search any exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:14,color:M.onSurface,outline:"none"}}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search any exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
           </div>
         </div>
         {results.length>0&&<div style={{padding:"0 20px"}}>
@@ -490,7 +491,7 @@ function CalendarModal({onClose}:{onClose:()=>void}){
     const entry=getEntry(selectedDate);const col=entry?getColor(entry.type):getColor("Rest");
     return(
       <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-        <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"80vh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+        <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
           <div className="sheet-handle"/>
           <div style={{padding:"16px 20px"}}>
             <button onClick={()=>setSelectedDate(null)} className="m3b" style={{background:M.surfaceContainerHighest,borderRadius:100,border:"none",padding:"8px 16px",fontSize:13,fontWeight:600,color:M.onSurfaceVariant,fontFamily:FONT,marginBottom:16,display:"flex",alignItems:"center",gap:6}}>
@@ -525,11 +526,11 @@ function CalendarModal({onClose}:{onClose:()=>void}){
   const now=new Date();const yr=now.getFullYear();const mo=now.getMonth();const firstDay=new Date(yr,mo,1).getDay();
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"85vh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+      <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
         <div className="sheet-handle"/>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px 12px"}}>
           <div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>Activity</div>
-          <button onClick={onClose} className="m3i" style={{width:36,height:36,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
+          <button onClick={onClose} className="m3i" style={{width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
         </div>
         <div style={{display:"flex",gap:8,padding:"0 20px 16px"}}>
           {["week","month"].map(v=>(
@@ -705,7 +706,7 @@ function ActiveScreen({
 
       {/* Session note */}
       <div style={{margin:"12px 16px 0"}}>
-        <input value={sessionNote} onChange={e=>setSessionNote(e.target.value)} placeholder="Session note (optional)…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:14,padding:"10px 16px",fontFamily:FONT,fontSize:13,color:M.onSurface,outline:"none"}}/>
+        <input value={sessionNote} onChange={e=>setSessionNote(e.target.value)} placeholder="Session note (optional)…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:14,padding:"10px 16px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
       </div>
 
       <div style={{margin:"10px 16px 0",background:M.primaryContainer,borderRadius:20,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}} onClick={()=>setStretchType("before")} className="m3b">
@@ -740,7 +741,7 @@ function ActiveScreen({
             {/* Exercise note field */}
             {noteOpenIdx===ei&&(
               <div style={{padding:"8px 16px",borderBottom:`1px solid ${M.surfaceContainerHighest}`}}>
-                <input value={ex.note} onChange={e=>setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,note:e.target.value}))} placeholder="Note for this exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"8px 14px",fontFamily:FONT,fontSize:13,color:M.onSurface,outline:"none"}}/>
+                <input value={ex.note} onChange={e=>setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,note:e.target.value}))} placeholder="Note for this exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"8px 14px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
               </div>
             )}
 
@@ -750,9 +751,9 @@ function ActiveScreen({
             {ex.rows.map((s,si)=>(
               <div key={si} className="fast" style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr 48px",gap:8,padding:"6px 16px",background:s.done?`${M.primaryContainer}70`:"transparent",alignItems:"center"}}>
                 <span style={{fontSize:12,fontWeight:700,color:s.done?M.primary:M.onSurfaceVariant,fontFamily:FONT}}>{si+1}</span>
-                <input type="number" value={s.weight} onChange={e=>{const v=parseFloat(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,weight:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:14,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
-                <input type="number" value={s.reps} onChange={e=>{const v=parseInt(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,reps:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:14,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
-                <button onClick={()=>toggle(ei,si)} className="m3i spring" style={{width:40,height:40,border:`2px solid ${s.done?M.primary:M.outline}`,background:s.done?M.primary:"transparent",color:s.done?M.onPrimary:M.outline}}>
+                <input type="number" inputMode="numeric" value={s.weight} onChange={e=>{const v=parseFloat(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,weight:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
+                <input type="number" inputMode="numeric" value={s.reps} onChange={e=>{const v=parseInt(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,reps:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
+                <button onClick={()=>toggle(ei,si)} className="m3i spring" style={{width:44,height:44,border:`2px solid ${s.done?M.primary:M.outline}`,background:s.done?M.primary:"transparent",color:s.done?M.onPrimary:M.outline}}>
                   {s.done&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>
               </div>
@@ -953,7 +954,7 @@ function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStar
                     <div style={{flex:1}}>
                       {renaming?.rIdx===rIdx&&renaming?.eIdx===eIdx?(
                         <div style={{display:"flex",gap:8}}>
-                          <input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&commitRename()} style={{flex:1,background:M.surfaceContainerHighest,border:`2px solid ${M.primary}`,borderRadius:14,padding:"8px 12px",fontSize:13,fontFamily:FONT,color:M.onSurface,outline:"none"}}/>
+                          <input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&commitRename()} style={{flex:1,background:M.surfaceContainerHighest,border:`2px solid ${M.primary}`,borderRadius:14,padding:"8px 12px",fontSize:16,fontFamily:FONT,color:M.onSurface,outline:"none"}}/>
                           <button onClick={commitRename} className="m3b" style={{background:M.primary,borderRadius:14,color:M.onPrimary,fontWeight:700,fontSize:13,padding:"8px 14px",fontFamily:FONT}}>✓</button>
                         </div>
                       ):(
@@ -979,7 +980,7 @@ function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStar
                   <div style={{paddingTop:12}}>
                     <div style={{position:"relative",marginBottom:8}}>
                       <svg style={{position:"absolute",left:18,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={M.onSurfaceVariant} strokeWidth="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                      <input value={exSearch} onChange={e=>{setExSearch(e.target.value);setNewExName(e.target.value);}} placeholder="Search or type exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:14,color:M.onSurface,outline:"none"}}/>
+                      <input value={exSearch} onChange={e=>{setExSearch(e.target.value);setNewExName(e.target.value);}} placeholder="Search or type exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
                     </div>
                     {exResults.map((ex,i)=>(
                       <div key={i} onClick={()=>addEx(rIdx,ex)} className="m3b" style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:M.surfaceContainerHighest,borderRadius:18,marginTop:6,cursor:"pointer"}}>
@@ -1116,6 +1117,7 @@ const NAV=[
 export default function FittyApp(){
   useCSS();
   const{isOffline,safeInsert}=useOfflineSync();
+  const{needRefresh:[needRefresh],updateServiceWorker}=useRegisterSW();
 
   const[loggedIn,setLoggedIn]=useState(false);
   const[userName,setUserName]=useState("");
@@ -1300,6 +1302,18 @@ export default function FittyApp(){
             </div>
             <button onClick={()=>{setRoutine(resumeSession.routine);setScreen("active");setActiveNav("workout");setResumeSession(null);}} className="m3b" style={{background:M.tertiary,color:M.onTertiary,borderRadius:100,padding:"6px 14px",fontSize:12,fontWeight:700,fontFamily:FONT,flexShrink:0}}>Resume</button>
             <button onClick={()=>{clearSession();setResumeSession(null);}} className="m3b" style={{background:"transparent",border:`1px solid ${M.outlineVariant}`,borderRadius:100,padding:"6px 10px",fontSize:12,color:M.onTertiaryContainer,fontFamily:FONT,flexShrink:0}}>Discard</button>
+          </div>
+        )}
+
+        {/* Update banner */}
+        {needRefresh&&(
+          <div style={{margin:"8px 16px 0",background:M.secondaryContainer,borderRadius:20,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,animation:"slideUp .4s cubic-bezier(.34,1.56,.64,1)"}}>
+            <span style={{fontSize:22}}>🔄</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:800,color:M.onSecondaryContainer,fontFamily:FONT}}>Update available</div>
+              <div style={{fontSize:11,color:M.onSecondaryContainer,opacity:.8,fontFamily:FONT}}>Tap to reload and get the latest version</div>
+            </div>
+            <button onClick={()=>updateServiceWorker(true)} className="m3b" style={{background:M.secondary,color:M.onSecondary,borderRadius:100,padding:"6px 14px",fontSize:12,fontWeight:700,fontFamily:FONT,flexShrink:0}}>Update</button>
           </div>
         )}
 
