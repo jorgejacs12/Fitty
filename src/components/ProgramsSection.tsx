@@ -988,7 +988,7 @@ function DayDetail({
   const sortedBlocks = [...blocks].sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 8px", flexShrink: 0 }}>
         <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1006,7 +1006,7 @@ function DayDetail({
       </div>
 
       {/* Scrollable blocks */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px", minHeight: 0, maxHeight: "calc(90dvh - 240px)" }}>
         {sortedBlocks.map(block => {
           const exs = exByBlock(block.id);
           const bg = blockBg(block.type);
@@ -1443,7 +1443,7 @@ export function ProgramsSection({ userId, onStartProgramDay }: Props): JSX.Eleme
         >
           <div
             className="stagger"
-            style={{ width: "100%", maxWidth: 480, background: M.surface, borderRadius: "28px 28px 0 0", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+            style={{ width: "100%", maxWidth: 480, background: M.surface, borderRadius: "28px 28px 0 0", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}
           >
             <div className="sheet-handle" />
 
@@ -1460,7 +1460,7 @@ export function ProgramsSection({ userId, onStartProgramDay }: Props): JSX.Eleme
             )}
 
             {sheetView === "detail" && selectedDay && (
-              <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
                 {loadingDetail ? (
                   <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: M.onSurfaceVariant, fontFamily: FONT }}>
                     Loading workout...
