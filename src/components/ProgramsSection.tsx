@@ -17,15 +17,15 @@ const M = {
 };
 
 // ── Type definitions ───────────────────────────────────────────────────────
-interface ProgramDay {
+export interface ProgramDay {
   id: string; dayNumber: number; originalDate: string; title: string; notes?: string;
   isPending: boolean;
 }
-interface ProgramBlock {
+export interface ProgramBlock {
   id: string; label: string; name?: string; type: string; sortOrder: number;
   theme?: string;
 }
-interface ProgramExercise {
+export interface ProgramExercise {
   id: string; blockId: string; exerciseName: string;
   sets?: number; reps?: string; restSeconds?: number;
   intensityNote?: string; formNote?: string; tempoNote?: string;
@@ -1124,14 +1124,14 @@ function ProgramList({
 }): JSX.Element {
   const sorted = [...days].sort((a, b) => a.dayNumber - b.dayNumber);
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 12px", flexShrink: 0 }}>
         <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: "50%", background: M.surfaceContainerHighest, border: "none", fontSize: 18, color: M.onSurfaceVariant, cursor: "pointer" }}>
           ←
         </button>
         <div style={{ fontSize: 20, fontWeight: 900, color: M.onSurface, fontFamily: FONT }}>Full Program</div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 32px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 32px", maxHeight: "calc(90dvh - 80px)" }}>
         {sorted.map(day => {
           const isCompleted = completedIds.includes(day.id);
           const isPending = day.isPending;
@@ -1189,7 +1189,7 @@ function ProgramList({
 // ── Props ──────────────────────────────────────────────────────────────────
 interface Props {
   userId: string;
-  onStartProgramDay: (day: ProgramDay, blocks: ProgramBlock[], exercises: ProgramExercise[]) => void;
+  onStartProgramDay: (day: ProgramDay, blocks: ProgramBlock[], exercises: ProgramExercise[], programId: string) => void;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -1327,8 +1327,8 @@ export function ProgramsSection({ userId, onStartProgramDay }: Props): JSX.Eleme
   };
 
   const handleStartWorkout = () => {
-    if (!selectedDay) return;
-    onStartProgramDay(selectedDay, detailBlocks, detailExercises);
+    if (!selectedDay || !program) return;
+    onStartProgramDay(selectedDay, detailBlocks, detailExercises, program.id);
     setSheetView(null);
   };
 

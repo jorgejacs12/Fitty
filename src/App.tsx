@@ -11,7 +11,7 @@ import { CustomExerciseModal } from "./components/CustomExerciseModal";
 import { FatigueMap, type RoutineFatigue } from "./components/FatigueMap";
 import { StreakSheet } from "./components/StreakSheet";
 import { PRSheet } from "./components/PRSheet";
-import { ProgramsSection } from "./components/ProgramsSection";
+import { ProgramsSection, type ProgramDay, type ProgramBlock, type ProgramExercise } from "./components/ProgramsSection";
 import { useOfflineSync } from "./hooks/useOfflineSync";
 import { useTheme, PALETTES } from "./context/ThemeContext";
 import {
@@ -254,7 +254,7 @@ const SUBS:Record<string,Sub[]>={
 const DEF_SUBS:Sub[]=[{name:"DB Variation",reason:"Dumbbell version",match:90},{name:"Machine Equivalent",reason:"Guided machine",match:85},{name:"Bodyweight Version",reason:"No equipment",match:75}];
 
 // ── Interfaces ────────────────────────────────────────────────────────────
-interface Exercise{id:string;name:string;sets:number;reps:string;}
+interface Exercise{id:string;name:string;sets:number;reps:string;defaultWeight?:number;}
 interface Routine{id:number;name:string;emoji:string;tag:string;lastDone:string;daysAgo:number;duration:string;exercises:Exercise[];}
 interface SetRow{weight:number;reps:number;done:boolean;}
 interface ActiveExercise extends Exercise{rows:SetRow[];note:string;}
@@ -286,6 +286,13 @@ async function dbSaveWorkout(userId:string,routine:Routine,exercises:ActiveExerc
   if(error||!w)return;
   const rows=exercises.map(ex=>({workout_id:(w as {id:string}).id,exercise_name:ex.name,sets_json:ex.rows.filter(r=>r.done),note:ex.note||null}));
   if(rows.length)await supabase.from("workout_exercises").insert(rows);
+}
+function getLastWeight(name:string,weRows:WorkoutExerciseRow[]):number{
+  const row=weRows.find(r=>r.exercise_name===name);
+  if(!row||!row.sets_json?.length)return 0;
+  const done=row.sets_json.filter(s=>s.done);
+  const sets=done.length?done:row.sets_json;
+  return sets[sets.length-1]?.weight??0;
 }
 async function dbLoadWorkouts(userId:string):Promise<WorkoutLog[]>{
   const{data}=await supabase.from("workouts").select("*").eq("user_id",userId).order("completed_at",{ascending:false}).limit(50);
@@ -598,7 +605,7 @@ function ActiveScreen({
 }){
   const[startTime]=useState(()=>Date.now());
   const[exercises,setExercises]=useState<ActiveExercise[]>(()=>
-    routine.exercises.map(ex=>({...ex,rows:Array.from({length:ex.sets},(_,i)=>({weight:70-i*2.5,reps:parseInt(ex.reps)||10,done:false})),note:""}))
+    routine.exercises.map(ex=>({...ex,rows:Array.from({length:ex.sets},()=>({weight:ex.defaultWeight??0,reps:parseInt(ex.reps)||10,done:false})),note:""}))
   );
   const[swapIdx,setSwapIdx]=useState<number|null>(null);
   const[swapped,setSwapped]=useState<Record<number,boolean>>({});
@@ -862,7 +869,7 @@ const TONES=[
   {bg:M.orangeContainer,fg:M.onOrangeContainer,btn:M.orangePrimary,btnFg:"#fff"},
 ];
 
-function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId}:{routines:Routine[];setRoutines:React.Dispatch<React.SetStateAction<Routine[]>>;onStart:(r:Routine)=>void;allExercises:string[];userId:string}){
+function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStartProgramDay}:{routines:Routine[];setRoutines:React.Dispatch<React.SetStateAction<Routine[]>>;onStart:(r:Routine)=>void;allExercises:string[];userId:string;onStartProgramDay:(day:ProgramDay,blocks:ProgramBlock[],exercises:ProgramExercise[],programId:string)=>void;}){
   const[open,setOpen]=useState<number|null>(null);
   const[editing,setEditing]=useState<number|null>(null);
   const[renaming,setRenaming]=useState<{rIdx:number;eIdx:number}|null>(null);
@@ -900,7 +907,7 @@ function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId}:{rout
       </div>
 
       {/* Active Program */}
-      <ProgramsSection userId={userId} onStartProgramDay={()=>{}}/>
+      <ProgramsSection userId={userId} onStartProgramDay={onStartProgramDay}/>
 
       <div style={{padding:"4px 20px 8px"}}>
         <div style={{fontSize:18,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>My Routines</div>
@@ -1118,6 +1125,8 @@ export default function FittyApp(){
   const[screen,setScreen]=useState("home");
   const[activeNav,setActiveNav]=useState("home");
   const[routine,setRoutine]=useState<Routine|null>(null);
+  const[activeProgramDayId,setActiveProgramDayId]=useState<string|null>(null);
+  const[activeProgramId,setActiveProgramId]=useState<string|null>(null);
   const[routines,setRoutines]=useState<Routine[]>(INIT);
   const[calendarOpen,setCalendarOpen]=useState(false);
   const[workoutLogs,setWorkoutLogs]=useState<WorkoutLog[]>([]);
@@ -1193,6 +1202,10 @@ export default function FittyApp(){
     setScreen("home");setActiveNav("home");
     if(userId){
       await dbSaveWorkout(userId,r,exercises,durationSec,sessionNote);
+      if(activeProgramDayId&&activeProgramId){
+        await supabase.from("program_day_logs").insert({user_id:userId,program_id:activeProgramId,day_id:activeProgramDayId});
+        setActiveProgramDayId(null);setActiveProgramId(null);
+      }
       loadAll(userId);
     }
   };
@@ -1320,12 +1333,12 @@ export default function FittyApp(){
 
         {/* Screens */}
         {screen==="home"&&<HomeScreen onStartWorkout={()=>{setScreen("routines");setActiveNav("workout");}} onOpenCalendar={()=>setCalendarOpen(true)} firstName={firstName} weeklyStreak={weeklyStreak} thisWeekCount={thisWeekCount} weeklyGoal={weeklyGoal} prCount={prCount} routineFatigue={routineFatigue} onStreakTap={()=>setStreakSheetOpen(true)} onPRTap={()=>setPrSheetOpen(true)}/>}
-        {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setRoutine(r);setScreen("active");setActiveNav("workout");}} allExercises={allExercises} userId={userId}/>}
+        {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setRoutine({...r,exercises:r.exercises.map(ex=>({...ex,defaultWeight:getLastWeight(ex.name,workoutExercises)}))});setScreen("active");setActiveNav("workout");}} allExercises={allExercises} userId={userId} onStartProgramDay={(day,_blocks,exs,programId)=>{const r:Routine={id:-1,name:`Day ${day.dayNumber} · ${day.title}`,emoji:"🏋️",tag:"SquatCtober",lastDone:"Today",daysAgo:0,duration:"60 min",exercises:exs.filter(ex=>ex.sets&&ex.sets>0).map(ex=>({id:ex.id,name:ex.exerciseName,sets:ex.sets!,reps:ex.reps||"10",defaultWeight:getLastWeight(ex.exerciseName,workoutExercises)}))};setRoutine(r);setActiveProgramDayId(day.id);setActiveProgramId(programId);setScreen("active");setActiveNav("workout");}}/>}
         {screen==="active"&&routine&&(
           <ActiveScreen
             routine={routine}
             onFinish={(exs,dur,note)=>finishWorkout(routine,exs,dur,note)}
-            onBack={()=>setScreen("routines")}
+            onBack={()=>{setScreen("routines");setActiveProgramDayId(null);setActiveProgramId(null);}}
             userId={userId}
             allPRs={personalRecords}
             onNewPR={pr=>setPendingPR(pr)}

@@ -42,7 +42,7 @@ export function getRestDuration(exerciseName: string): number {
 }
 
 export function RestTimer({
-  state, onTick, onComplete, onSkip, onAddThirty,
+  state, onTick, onComplete, onSkip,
   onSetDuration, onAdjust,
   primaryColor = "#4F378B",
   primaryContainer = "#EADDFF",
@@ -163,16 +163,16 @@ export function RestTimer({
               </div>
               {!isDone && (
                 <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                  <button onClick={() => onAdjust?.(-15)} style={{
+                  <button onClick={() => onAdjust?.(-10)} style={{
                     background: surfaceContainerHighest, border: "none",
                     borderRadius: 100, padding: "3px 8px", fontSize: 11,
                     fontWeight: 700, color: onSurfaceVariant, fontFamily: FONT, cursor: "pointer",
-                  }}>−15</button>
-                  <button onClick={onAddThirty} style={{
+                  }}>−10</button>
+                  <button onClick={() => onAdjust?.(10)} style={{
                     background: secondaryContainer, border: "none",
                     borderRadius: 100, padding: "3px 8px", fontSize: 11,
                     fontWeight: 700, color: onSecondaryContainer, fontFamily: FONT, cursor: "pointer",
-                  }}>+30s</button>
+                  }}>+10</button>
                 </div>
               )}
             </div>
