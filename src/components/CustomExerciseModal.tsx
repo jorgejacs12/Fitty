@@ -1,8 +1,8 @@
 import { useState, type JSX } from "react";
 
 const M = {
-  primary: "#4F378B", onPrimary: "#FFFFFF",
-  primaryContainer: "#EADDFF", onPrimaryContainer: "#21005D",
+  primary: "var(--fp)", onPrimary: "var(--fop)",
+  primaryContainer: "var(--fpc)", onPrimaryContainer: "var(--fopc)",
   surface: "#FFFBFE", surfaceContainerHighest: "#E6E0EB",
   onSurface: "#1C1B1F", onSurfaceVariant: "#49454F",
   outlineVariant: "#CAC4D0",

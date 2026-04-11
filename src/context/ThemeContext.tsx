@@ -73,6 +73,9 @@ function injectCSSVars(p: Palette) {
   let el = document.getElementById("fitty-theme") as HTMLStyleElement | null;
   if (!el) { el = document.createElement("style"); el.id = "fitty-theme"; document.head.appendChild(el); }
   el.textContent = `:root{--fp:${p.primary};--fop:${p.onPrimary};--fpc:${p.primaryContainer};--fopc:${p.onPrimaryContainer};--fs:${p.secondary};--fos:${p.onSecondary};--fsc:${p.secondaryContainer};--fosc:${p.onSecondaryContainer};--ft:${p.tertiary};--fot:${p.onTertiary};--ftc:${p.tertiaryContainer};--fotc:${p.onTertiaryContainer};}`;
+  // Update browser chrome / PWA status bar color
+  const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+  if (meta) meta.content = p.primary;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

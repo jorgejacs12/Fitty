@@ -15,6 +15,7 @@ import { PRSheet } from "./components/PRSheet";
 import { ProgramsSection, type ProgramDay, type ProgramBlock, type ProgramExercise } from "./components/ProgramsSection";
 import { useOfflineSync } from "./hooks/useOfflineSync";
 import { useTheme, PALETTES } from "./context/ThemeContext";
+import { APP_VERSION } from "./version";
 import {
   dbLoadWorkoutsWithExercises, dbLoadPRs, dbSavePR, dbGetBestPR,
   dbLoadBodyMetrics, dbSaveBodyMetric, dbLoadCustomExercises, dbSaveCustomExercise,
@@ -1093,6 +1094,7 @@ function HomeScreen({onStartWorkout,onOpenCalendar,firstName,weeklyStreak,thisWe
         </div>
         <div style={{fontSize:11,color:M.onSurfaceVariant,fontFamily:FONT,textAlign:"center",marginTop:10,opacity:.7}}>Tap to see full activity history</div>
       </div>
+      <div style={{fontSize:11,color:M.onSurfaceVariant,fontFamily:FONT,textAlign:"center",marginBottom:12,opacity:.55}}>v{APP_VERSION}</div>
     </div>
   );
 }

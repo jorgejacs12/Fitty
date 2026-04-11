@@ -32,9 +32,9 @@ interface Props {
 
 export function StreakSheet({
   logs, weeklyGoal, longestStreak, onClose,
-  primaryColor="#4F378B",
-  primaryContainer="#EADDFF",
-  onPrimaryContainer="#21005D",
+  primaryColor="var(--fp)",
+  primaryContainer="var(--fpc)",
+  onPrimaryContainer="var(--fopc)",
   surface="#FFFBFE",
   surfaceContainerHighest="#E6E0EB",
   onSurface="#1C1B1F",

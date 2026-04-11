@@ -22,9 +22,9 @@ interface Props {
 }
 
 const M = {
-  primary: "#4F378B", primaryContainer: "#EADDFF", onPrimaryContainer: "#21005D",
-  secondary: "#625B71", secondaryContainer: "#E8DEF8", onSecondaryContainer: "#1D192B",
-  tertiary: "#7D5260", tertiaryContainer: "#FFD8E4", onTertiaryContainer: "#31111D",
+  primary: "var(--fp)", primaryContainer: "var(--fpc)", onPrimaryContainer: "var(--fopc)",
+  secondary: "var(--fs)", secondaryContainer: "var(--fsc)", onSecondaryContainer: "var(--fosc)",
+  tertiary: "var(--ft)", tertiaryContainer: "var(--ftc)", onTertiaryContainer: "var(--fotc)",
   background: "#FFFBFE", surface: "#FFFBFE",
   surfaceContainer: "#F3EDF7", surfaceContainerHigh: "#ECE6F0",
   surfaceContainerHighest: "#E6E0EB",

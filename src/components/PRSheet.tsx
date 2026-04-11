@@ -26,9 +26,9 @@ interface Props {
 
 export function PRSheet({
   prs, onClose,
-  primaryColor="#4F378B",
-  primaryContainer:_pc="#EADDFF",
-  onPrimaryContainer:_opc="#21005D",
+  primaryColor="var(--fp)",
+  primaryContainer:_pc="var(--fpc)",
+  onPrimaryContainer:_opc="var(--fopc)",
   surface="#FFFBFE",
   surfaceContainerHighest="#E6E0EB",
   onSurface="#1C1B1F",

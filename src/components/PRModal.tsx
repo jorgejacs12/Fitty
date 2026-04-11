@@ -1,10 +1,10 @@
 import type { JSX } from "react";
 
 const M = {
-  primary: "#4F378B", onPrimary: "#FFFFFF",
-  primaryContainer: "#EADDFF", onPrimaryContainer: "#21005D",
-  secondaryContainer: "#E8DEF8", onSecondaryContainer: "#1D192B",
-  tertiaryContainer: "#FFD8E4", onTertiaryContainer: "#31111D",
+  primary: "var(--fp)", onPrimary: "var(--fop)",
+  primaryContainer: "var(--fpc)", onPrimaryContainer: "var(--fopc)",
+  secondaryContainer: "var(--fsc)", onSecondaryContainer: "var(--fosc)",
+  tertiaryContainer: "var(--ftc)", onTertiaryContainer: "var(--fotc)",
   surface: "#FFFBFE", surfaceContainerHighest: "#E6E0EB",
   onSurface: "#1C1B1F", onSurfaceVariant: "#49454F",
 };
