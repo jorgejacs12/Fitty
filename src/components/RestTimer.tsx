@@ -41,14 +41,29 @@ export function getRestDuration(exerciseName: string): number {
   return isCompound ? 180 : 90;
 }
 
+function playBeep() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch { /* AudioContext unavailable */ }
+}
+
 export function RestTimer({
   state, onTick, onComplete, onSkip,
   onSetDuration, onAdjust,
-  primaryColor = "#4F378B",
-  primaryContainer = "#EADDFF",
-  onPrimaryContainer = "#21005D",
-  secondaryContainer = "#E8DEF8",
-  onSecondaryContainer = "#1D192B",
+  primaryColor = "var(--fp)",
+  primaryContainer = "var(--fpc)",
+  onPrimaryContainer = "var(--fopc)",
+  secondaryContainer = "var(--fsc)",
+  onSecondaryContainer = "var(--fosc)",
   surface = "#FFFBFE",
   surfaceContainerHighest = "#E6E0EB",
   onSurface = "#1C1B1F",
@@ -74,6 +89,7 @@ export function RestTimer({
     if (state.remaining === 0 && state.active && !flashRef.current) {
       flashRef.current = true;
       if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
+      playBeep();
       setFlash(true);
       setTimeout(() => {
         setFlash(false);

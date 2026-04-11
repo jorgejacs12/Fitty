@@ -478,15 +478,21 @@ function SwapDrawer({exerciseName,onSwap,onClose,allExercises}:{exerciseName:str
   );
 }
 
-function CalendarModal({onClose}:{onClose:()=>void}){
+function CalendarModal({onClose,workoutLogs=[],runs=[]}:{onClose:()=>void;workoutLogs:WorkoutLog[];runs:Run[]}){
   const[view,setView]=useState("week");
   const[selectedDate,setSelectedDate]=useState<string|null>(null);
   const today=new Date().toISOString().slice(0,10);
   const weekDays=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));return d.toISOString().slice(0,10);});
   const weekLabels=weekDays.map(d=>new Date(d+"T12:00:00").toLocaleDateString("en-US",{weekday:"short"}).slice(0,3));
   const monthDays=Array.from({length:new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate()},(_,i)=>i+1);
-  const getEntry=(dateStr:string)=>HISTORY[dateStr]||null;
-  const getColor=(type:string)=>(TYPE_COLORS[type]||TYPE_COLORS["Rest"]);
+  const logsByDate=useMemo(()=>{const m:Record<string,WorkoutLog>={};workoutLogs.forEach(w=>{const d=w.completed_at.slice(0,10);if(!m[d]||w.completed_at>m[d].completed_at)m[d]=w;});return m;},[workoutLogs]);
+  const runsByDate=useMemo(()=>{const m:Record<string,Run>={};runs.forEach(r=>{const d=r.ran_at.slice(0,10);if(!m[d]||r.ran_at>m[d].ran_at)m[d]=r;});return m;},[runs]);
+  const getEntry=(dateStr:string):{type:string;emoji:string;exercises?:string[];miles?:number;duration?:number}|null=>{
+    const w=logsByDate[dateStr];if(w)return{type:w.routine_name,emoji:w.routine_emoji,duration:w.duration_seconds};
+    const r=runsByDate[dateStr];if(r)return{type:"Run",emoji:"🏃",miles:r.distance_miles,duration:r.duration_seconds};
+    return HISTORY[dateStr]||null;
+  };
+  const getColor=(type:string)=>(TYPE_COLORS[type]||TYPE_COLORS["Push Day"]);
   if(selectedDate){
     const entry=getEntry(selectedDate);const col=entry?getColor(entry.type):getColor("Rest");
     return(
@@ -502,7 +508,11 @@ function CalendarModal({onClose}:{onClose:()=>void}){
               <>
                 <div style={{background:col.bg,borderRadius:24,padding:"20px",marginBottom:16,display:"flex",alignItems:"center",gap:16}}>
                   <span style={{fontSize:40}}>{entry.emoji}</span>
-                  <div><div style={{fontSize:22,fontWeight:900,color:col.fg,fontFamily:FONT}}>{entry.type}</div>{entry.miles&&<div style={{fontSize:14,color:col.fg,opacity:.85,fontFamily:FONT,marginTop:2}}>{entry.miles} miles</div>}</div>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:900,color:col.fg,fontFamily:FONT}}>{entry.type}</div>
+                    {entry.miles&&<div style={{fontSize:14,color:col.fg,opacity:.85,fontFamily:FONT,marginTop:2}}>{entry.miles} miles</div>}
+                    {entry.duration&&<div style={{fontSize:14,color:col.fg,opacity:.85,fontFamily:FONT,marginTop:2}}>⏱ {fmtDur(entry.duration)}</div>}
+                  </div>
                 </div>
                 {entry.exercises&&entry.exercises.map((ex,i)=>(
                   <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<(entry.exercises?.length??0)-1?`1px solid ${M.surfaceContainerHighest}`:"none",animation:`stagger .25s ${i*50}ms both`}}>
@@ -595,7 +605,7 @@ function SetBurst({show}:{show:boolean}){
 
 // ── Active Workout screen ─────────────────────────────────────────────────
 function ActiveScreen({
-  routine,onFinish,onBack,userId,allPRs:_allPRs,onNewPR,
+  routine,onFinish,onBack,userId,allPRs:_allPRs,onNewPR,startTimestamp,
 }:{
   routine:Routine;
   onFinish:(exercises:ActiveExercise[],durationSec:number,sessionNote:string)=>void;
@@ -603,8 +613,11 @@ function ActiveScreen({
   userId:string;
   allPRs:PersonalRecord[];
   onNewPR:(pr:PRInfo)=>void;
+  startTimestamp?:number;
 }){
-  const[startTime]=useState(()=>Date.now());
+  const[startTime]=useState(()=>startTimestamp||Date.now());
+  const[elapsed,setElapsed]=useState(0);
+  const[restDurations,setRestDurations]=useState<Record<string,number>>({});
   const[exercises,setExercises]=useState<ActiveExercise[]>(()=>
     routine.exercises.map(ex=>({...ex,rows:Array.from({length:ex.sets},()=>({weight:ex.defaultWeight??0,reps:parseInt(ex.reps)||10,done:false})),note:""}))
   );
@@ -616,6 +629,14 @@ function ActiveScreen({
   const[sessionNote,setSessionNote]=useState("");
   const[noteOpenIdx,setNoteOpenIdx]=useState<number|null>(null);
   const[prBadges,setPrBadges]=useState<Record<number,PRTier>>({});
+
+  useEffect(()=>{
+    const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startTime)/1000)),1000);
+    return()=>clearInterval(id);
+  },[startTime]);
+
+  const fmtElapsed=(sec:number)=>{const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`;};
+
 
   // Auto-save session to localStorage on every change
   useEffect(()=>{
@@ -636,8 +657,8 @@ function ActiveScreen({
       // Burst animation
       setBurst(true);setTimeout(()=>setBurst(false),900);
 
-      // Start rest timer
-      const dur=getRestDuration(exercises[ei].name);
+      // Start rest timer (use remembered duration for this exercise if set)
+      const dur=restDurations[exercises[ei].name]||getRestDuration(exercises[ei].name);
       setRestTimer({active:true,totalSec:dur,remaining:dur,exerciseName:exercises[ei].name});
 
       // PR detection
@@ -684,18 +705,18 @@ function ActiveScreen({
         onComplete={()=>{}}
         onSkip={()=>setRestTimer(s=>({...s,active:false}))}
         onAddThirty={()=>setRestTimer(s=>({...s,remaining:s.remaining+30,totalSec:s.totalSec+30}))}
-        onSetDuration={sec=>setRestTimer(s=>({...s,totalSec:sec,remaining:sec,active:true}))}
-        onAdjust={delta=>setRestTimer(s=>({...s,remaining:Math.max(0,s.remaining+delta),totalSec:Math.max(15,s.totalSec+delta)}))}
+        onSetDuration={sec=>{setRestDurations(d=>({...d,[restTimer.exerciseName]:sec}));setRestTimer(s=>({...s,totalSec:sec,remaining:sec,active:true}));}}
+        onAdjust={delta=>{const newTotal=Math.max(15,restTimer.totalSec+delta);setRestDurations(d=>({...d,[restTimer.exerciseName]:newTotal}));setRestTimer(s=>({...s,remaining:Math.max(0,s.remaining+delta),totalSec:newTotal}));}}
       />
 
-      <div style={{background:M.surfaceContainer}}>
+      <div style={{background:M.primaryContainer}}>
         <div style={{display:"flex",alignItems:"center",gap:4,padding:"12px 8px 8px"}}>
           <button onClick={onBack} className="m3i" style={{width:44,height:44,background:"transparent",color:M.onSurface}}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div style={{flex:1,padding:"0 8px"}}>
             <div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT,letterSpacing:"-.3px"}}>{routine.emoji} {routine.name}</div>
-            <div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:1}}>{done}/{total} sets · +{done*10} XP</div>
+            <div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT,marginTop:1}}>{done}/{total} sets · +{done*10} XP · {fmtElapsed(elapsed)}</div>
           </div>
           <button onClick={()=>{clearSession();onFinish(exercises,Math.round((Date.now()-startTime)/1000),sessionNote);}} className="m3b" style={{background:M.primary,color:M.onPrimary,borderRadius:100,padding:"10px 20px",fontWeight:700,fontSize:13,fontFamily:FONT,marginRight:8}}>Finish ✓</button>
         </div>
@@ -751,7 +772,7 @@ function ActiveScreen({
             {ex.rows.map((s,si)=>(
               <div key={si} className="fast" style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr 48px",gap:8,padding:"6px 16px",background:s.done?`${M.primaryContainer}70`:"transparent",alignItems:"center"}}>
                 <span style={{fontSize:12,fontWeight:700,color:s.done?M.primary:M.onSurfaceVariant,fontFamily:FONT}}>{si+1}</span>
-                <input type="number" inputMode="numeric" value={s.weight} onChange={e=>{const v=parseFloat(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,weight:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
+                <input type="number" inputMode="numeric" value={s.weight} onChange={e=>{const v=parseFloat(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j===si?{...r,weight:v}:j>si&&!r.done?{...r,weight:v}:r)}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
                 <input type="number" inputMode="numeric" value={s.reps} onChange={e=>{const v=parseInt(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,reps:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
                 <button onClick={()=>toggle(ei,si)} className="m3i spring" style={{width:44,height:44,border:`2px solid ${s.done?M.primary:M.outline}`,background:s.done?M.primary:"transparent",color:s.done?M.onPrimary:M.outline}}>
                   {s.done&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -1143,6 +1164,7 @@ export default function FittyApp(){
   const[weeklyGoal,setWeeklyGoal]=useState(()=>parseInt(localStorage.getItem("fitty_weekly_goal")||"3")||3);
   const[longestStreak,setLongestStreak]=useState(0);
   const[resumeSession,setResumeSession]=useState<SavedSession|null>(null);
+  const[workoutStartTime,setWorkoutStartTime]=useState<number>(()=>Date.now());
 
   // User settings (persisted to localStorage)
   const[targetPaceSec]=useState(()=>parseInt(localStorage.getItem("fitty_target_pace")||"0")||0);
@@ -1201,15 +1223,16 @@ export default function FittyApp(){
 
   const finishWorkout=async(r:Routine,exercises:ActiveExercise[],durationSec:number,sessionNote:string)=>{
     setRoutines(p=>{const u=p.map(rt=>rt.id===r.id?{...rt,lastDone:"Today",daysAgo:0}:rt);return[...u].sort((a,b)=>{if(a.daysAgo===0&&b.daysAgo!==0)return 1;if(b.daysAgo===0&&a.daysAgo!==0)return-1;return b.daysAgo-a.daysAgo;});});
-    setScreen("home");setActiveNav("home");
     if(userId){
-      await dbSaveWorkout(userId,r,exercises,durationSec,sessionNote);
+      // Insert program day log first (awaited) so ProgramsSection sees it when re-mounting
       if(activeProgramDayId&&activeProgramId){
-        await supabase.from("program_day_logs").insert({user_id:userId,program_id:activeProgramId,day_id:activeProgramDayId});
+        await supabase.from("program_day_logs").insert({user_id:userId,program_id:activeProgramId,day_id:activeProgramDayId,completed_at:new Date().toISOString()});
         setActiveProgramDayId(null);setActiveProgramId(null);
       }
-      loadAll(userId);
+      // Workout save + reload can happen in background
+      dbSaveWorkout(userId,r,exercises,durationSec,sessionNote).then(()=>loadAll(userId));
     }
+    setScreen("home");setActiveNav("home");
   };
 
   const handleRunSaved=async(fields:{distanceMiles:number;durationSeconds:number;notes:string;routeName?:string;heartRateAvg?:number;runDate:string},editId?:string)=>{
@@ -1287,7 +1310,7 @@ export default function FittyApp(){
   return(
     <div style={{fontFamily:FONT,background:M.background,color:M.onSurface,minHeight:"100vh",display:"flex",justifyContent:"center",WebkitFontSmoothing:"antialiased"}}>
       <div style={{width:"100%",maxWidth:430,position:"relative",paddingBottom:96}}>
-        {calendarOpen&&<CalendarModal onClose={()=>setCalendarOpen(false)}/>}
+        {calendarOpen&&<CalendarModal onClose={()=>setCalendarOpen(false)} workoutLogs={workoutLogs} runs={runs}/>}
         {pendingPR&&<PRModal pr={pendingPR} onClose={()=>setPendingPR(null)}/>}
         {streakSheetOpen&&<StreakSheet logs={workoutLogs} weeklyGoal={weeklyGoal} longestStreak={longestStreak} onClose={()=>setStreakSheetOpen(false)}/>}
         {prSheetOpen&&<PRSheet prs={personalRecords} onClose={()=>setPrSheetOpen(false)}/>}
@@ -1300,7 +1323,7 @@ export default function FittyApp(){
               <div style={{fontSize:13,fontWeight:800,color:M.onTertiaryContainer,fontFamily:FONT}}>Unfinished workout</div>
               <div style={{fontSize:11,color:M.onTertiaryContainer,opacity:.8,fontFamily:FONT}}>{resumeSession.routine.name}</div>
             </div>
-            <button onClick={()=>{setRoutine(resumeSession.routine);setScreen("active");setActiveNav("workout");setResumeSession(null);}} className="m3b" style={{background:M.tertiary,color:M.onTertiary,borderRadius:100,padding:"6px 14px",fontSize:12,fontWeight:700,fontFamily:FONT,flexShrink:0}}>Resume</button>
+            <button onClick={()=>{setWorkoutStartTime(resumeSession.startTimestamp);setRoutine(resumeSession.routine);setScreen("active");setActiveNav("workout");setResumeSession(null);}} className="m3b" style={{background:M.tertiary,color:M.onTertiary,borderRadius:100,padding:"6px 14px",fontSize:12,fontWeight:700,fontFamily:FONT,flexShrink:0}}>Resume</button>
             <button onClick={()=>{clearSession();setResumeSession(null);}} className="m3b" style={{background:"transparent",border:`1px solid ${M.outlineVariant}`,borderRadius:100,padding:"6px 10px",fontSize:12,color:M.onTertiaryContainer,fontFamily:FONT,flexShrink:0}}>Discard</button>
           </div>
         )}
@@ -1347,7 +1370,7 @@ export default function FittyApp(){
 
         {/* Screens */}
         {screen==="home"&&<HomeScreen onStartWorkout={()=>{setScreen("routines");setActiveNav("workout");}} onOpenCalendar={()=>setCalendarOpen(true)} firstName={firstName} weeklyStreak={weeklyStreak} thisWeekCount={thisWeekCount} weeklyGoal={weeklyGoal} prCount={prCount} routineFatigue={routineFatigue} onStreakTap={()=>setStreakSheetOpen(true)} onPRTap={()=>setPrSheetOpen(true)}/>}
-        {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setRoutine({...r,exercises:r.exercises.map(ex=>({...ex,defaultWeight:getLastWeight(ex.name,workoutExercises)}))});setScreen("active");setActiveNav("workout");}} allExercises={allExercises} userId={userId} onStartProgramDay={(day,_blocks,exs,programId)=>{const r:Routine={id:-1,name:`Day ${day.dayNumber} · ${day.title}`,emoji:"🏋️",tag:"SquatCtober",lastDone:"Today",daysAgo:0,duration:"60 min",exercises:exs.filter(ex=>ex.sets&&ex.sets>0).map(ex=>({id:ex.id,name:ex.exerciseName,sets:ex.sets!,reps:ex.reps||"10",defaultWeight:getLastWeight(ex.exerciseName,workoutExercises)}))};setRoutine(r);setActiveProgramDayId(day.id);setActiveProgramId(programId);setScreen("active");setActiveNav("workout");}}/>}
+        {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setWorkoutStartTime(Date.now());setRoutine({...r,exercises:r.exercises.map(ex=>({...ex,defaultWeight:getLastWeight(ex.name,workoutExercises)}))});setScreen("active");setActiveNav("workout");}} allExercises={allExercises} userId={userId} onStartProgramDay={(day,_blocks,exs,programId)=>{setWorkoutStartTime(Date.now());const r:Routine={id:-1,name:`Day ${day.dayNumber} · ${day.title}`,emoji:"🏋️",tag:"SquatCtober",lastDone:"Today",daysAgo:0,duration:"60 min",exercises:exs.filter(ex=>ex.sets&&ex.sets>0).map(ex=>({id:ex.id,name:ex.exerciseName,sets:ex.sets!,reps:ex.reps||"10",defaultWeight:getLastWeight(ex.exerciseName,workoutExercises)}))};setRoutine(r);setActiveProgramDayId(day.id);setActiveProgramId(programId);setScreen("active");setActiveNav("workout");}}/>}
         {screen==="active"&&routine&&(
           <ActiveScreen
             routine={routine}
@@ -1356,6 +1379,7 @@ export default function FittyApp(){
             userId={userId}
             allPRs={personalRecords}
             onNewPR={pr=>setPendingPR(pr)}
+            startTimestamp={workoutStartTime}
           />
         )}
         {screen==="running"&&(
