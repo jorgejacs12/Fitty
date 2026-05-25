@@ -244,7 +244,52 @@ function ExerciseTile({name,onTap,size=56}:{name:string;onTap:(e:React.MouseEven
 }
 
 // ── Exercise library ──────────────────────────────────────────────────────
-const BASE_EX=["Barbell Bench Press","Incline DB Press","Decline Bench Press","Cable Flyes","DB Flyes","Pec Deck","Overhead Press","Lateral Raises","Front Raises","Arnold Press","Rear Delt Flyes","Barbell Rows","DB Rows","Seated Cable Row","Lat Pulldown","Face Pull","Pull-Ups","Chin-Ups","Deadlift","Romanian Deadlift","Trap Bar Deadlift","Barbell Squat","Hack Squat","Leg Press","Leg Curl Machine","Leg Extension","Walking Lunges","Bulgarian Split Squat","Calf Raises","Barbell Curls","Hammer Curls","Preacher Curls","Tricep Pushdown","Skull Crushers","Dips","Cable Crunches","Hanging Leg Raises","Ab Wheel Rollout","Plank","Russian Twists","Adductor Machine","Abductor Machine","Wrist Curls","Farmer's Carry","Neck Flexion"];
+const BASE_EX=[
+  // Original exercises
+  "Barbell Bench Press","Incline DB Press","Decline Bench Press","Cable Flyes","DB Flyes","Pec Deck",
+  "Overhead Press","Lateral Raises","Front Raises","Arnold Press","Rear Delt Flyes",
+  "Barbell Rows","DB Rows","Seated Cable Row","Lat Pulldown","Face Pull","Pull-Ups","Chin-Ups",
+  "Deadlift","Romanian Deadlift","Trap Bar Deadlift",
+  "Barbell Squat","Hack Squat","Leg Press","Leg Curl Machine","Leg Extension","Walking Lunges","Bulgarian Split Squat","Calf Raises",
+  "Barbell Curls","Hammer Curls","Preacher Curls","Tricep Pushdown","Skull Crushers","Dips",
+  "Cable Crunches","Hanging Leg Raises","Ab Wheel Rollout","Plank","Russian Twists",
+  "Adductor Machine","Abductor Machine","Wrist Curls","Farmer's Carry","Neck Flexion",
+  // Dumbbell exercises
+  "DB Bench Press","DB Incline Press","DB Decline Press","DB Fly","DB Pullover",
+  "DB Shoulder Press","DB Arnold Press","DB Front Raise","DB Rear Delt Fly","DB Row",
+  "DB Shrug","DB Curl","DB Hammer Curl","DB Concentration Curl","DB Preacher Curl",
+  "DB Tricep Extension","DB Overhead Tricep Extension","DB Kickback",
+  "DB Goblet Squat","DB Romanian Deadlift","DB Sumo Deadlift","DB Lunge","DB Reverse Lunge",
+  "DB Step Up","DB Hip Thrust","DB Glute Bridge","DB Lateral Lunge","DB Single Leg Deadlift",
+  // Smith Machine
+  "Smith Machine Squat","Smith Machine Front Squat","Smith Machine Bench Press",
+  "Smith Machine Incline Press","Smith Machine Shoulder Press","Smith Machine Row",
+  "Smith Machine Romanian Deadlift","Smith Machine Calf Raise","Smith Machine Lunge","Smith Machine Hip Thrust",
+  // Cable Machine
+  "Cable Fly","Cable Crossover","Cable Row","Cable Curl","Cable Hammer Curl",
+  "Cable Tricep Pushdown","Cable Overhead Tricep Extension","Cable Lateral Raise",
+  "Cable Front Raise","Cable Rear Delt Fly","Cable Face Pull","Cable Pull Through",
+  "Cable Crunch","Cable Woodchop","Cable Kickback","Cable Hip Abduction","Cable Hip Adduction",
+  "Low Cable Row","High Cable Row",
+  // Machines
+  "Chest Press Machine","Pec Deck Machine","Incline Chest Press Machine",
+  "Shoulder Press Machine","Rear Delt Machine","Lateral Raise Machine",
+  "Seated Row Machine","Assisted Pull-Up Machine","Leg Press Machine","Hack Squat Machine",
+  "Leg Curl Machine (Seated)","Leg Curl Machine (Lying)","Leg Extension Machine",
+  "Hip Abductor Machine","Hip Adductor Machine","Glute Kickback Machine",
+  "Seated Calf Raise Machine","Standing Calf Raise Machine","Back Extension Machine",
+  "Ab Crunch Machine","Torso Rotation Machine","Tricep Dip Machine",
+  // Bodyweight and other
+  "Pull-Up","Chin-Up","Wide Grip Pull-Up","Neutral Grip Pull-Up",
+  "Dip","Bench Dip","Ring Dip",
+  "Push-Up","Wide Push-Up","Diamond Push-Up","Decline Push-Up","Incline Push-Up","Pike Push-Up","Archer Push-Up",
+  "Bodyweight Squat","Jump Squat","Box Jump","Step Up","Glute Bridge","Hip Thrust",
+  "Nordic Curl","Reverse Hyper","Side Plank","Hollow Hold","Dead Bug",
+  "Mountain Climber","Burpee","Jumping Jack",
+  "Battle Ropes","Sled Push","Sled Pull","Tire Flip","Sandbag Carry","Yoke Carry",
+  "TRX Row","TRX Push-Up","TRX Curl",
+  "Resistance Band Pull Apart","Band Curl","Band Tricep Pushdown","Band Lateral Walk",
+];
 
 interface Sub{name:string;reason:string;match:number;}
 const SUBS:Record<string,Sub[]>={
@@ -435,11 +480,24 @@ function StretchModal({type,onClose}:{type:string;onClose:()=>void}){
   );
 }
 
-function SwapDrawer({exerciseName,onSwap,onClose,allExercises}:{exerciseName:string;onSwap:(sub:Partial<Sub>)=>void;onClose:()=>void;allExercises:string[]}){
+function SwapDrawer({exerciseName,onSwap,onClose,allExercises,userId,onCustomAdded}:{exerciseName:string;onSwap:(sub:Partial<Sub>)=>void;onClose:()=>void;allExercises:string[];userId?:string;onCustomAdded?:()=>void;}){
   const[search,setSearch]=useState("");
   const subs=SUBS[exerciseName]||DEF_SUBS;
-  const results=search.trim().length>1?allExercises.filter(e=>e.toLowerCase().includes(search.toLowerCase())&&e!==exerciseName).slice(0,5):[];
+  const trimmed=search.trim();
+  const results=trimmed.length>1?allExercises.filter(e=>e.toLowerCase().includes(trimmed.toLowerCase())&&e!==exerciseName).slice(0,8):[];
+  const exactMatch=allExercises.some(e=>e.toLowerCase()===trimmed.toLowerCase());
+  const showAddNew=trimmed.length>1&&!exactMatch;
   const ms=(m:number)=>m>=95?{bg:M.greenContainer,fg:M.greenPrimary}:m>=85?{bg:M.primaryContainer,fg:M.onPrimaryContainer}:{bg:M.orangeContainer,fg:M.orangePrimary};
+
+  const handleAddNew=async()=>{
+    const name=trimmed;
+    if(userId&&name){
+      try{await dbSaveCustomExercise(userId,name,"","");}catch{}
+      onCustomAdded?.();
+    }
+    onSwap({name});
+  };
+
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
@@ -451,11 +509,17 @@ function SwapDrawer({exerciseName,onSwap,onClose,allExercises}:{exerciseName:str
         <div style={{padding:"0 20px 14px"}}>
           <div style={{position:"relative"}}>
             <svg style={{position:"absolute",left:18,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={M.onSurfaceVariant} strokeWidth="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search any exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search or type any exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
           </div>
         </div>
-        {results.length>0&&<div style={{padding:"0 20px"}}>
+        {(showAddNew||results.length>0)&&<div style={{padding:"0 20px"}}>
           <div style={{fontSize:11,fontWeight:700,color:M.onSurfaceVariant,letterSpacing:".8px",textTransform:"uppercase",marginBottom:10,fontFamily:FONT}}>Search Results</div>
+          {showAddNew&&(
+            <div onClick={handleAddNew} className="m3b" style={{display:"flex",alignItems:"center",gap:14,padding:"12px 14px",background:M.primaryContainer,borderRadius:20,marginBottom:8,cursor:"pointer",animation:"stagger .2s both"}}>
+              <div style={{width:48,height:48,borderRadius:14,background:M.primary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>+</div>
+              <div><div style={{fontSize:14,fontWeight:700,color:M.onPrimaryContainer,fontFamily:FONT}}>Add "{trimmed}" as new exercise</div><div style={{fontSize:12,color:M.onPrimaryContainer,opacity:.75,fontFamily:FONT}}>Tap to use this name →</div></div>
+            </div>
+          )}
           {results.map((ex,i)=>(
             <div key={i} onClick={()=>onSwap({name:ex})} className="m3b" style={{display:"flex",alignItems:"center",gap:14,padding:"12px 14px",background:M.surfaceContainerHigh,borderRadius:20,marginBottom:8,cursor:"pointer",animation:`stagger .25s ${i*50}ms both`}}>
               <ExerciseTile name={ex} onTap={e=>e.stopPropagation()} size={48}/>
@@ -607,6 +671,7 @@ function SetBurst({show}:{show:boolean}){
 // ── Active Workout screen ─────────────────────────────────────────────────
 function ActiveScreen({
   routine,onFinish,onBack,userId,allPRs:_allPRs,onNewPR,startTimestamp,
+  allExercises,workoutExercises,onCustomExerciseSaved,
 }:{
   routine:Routine;
   onFinish:(exercises:ActiveExercise[],durationSec:number,sessionNote:string)=>void;
@@ -615,7 +680,12 @@ function ActiveScreen({
   allPRs:PersonalRecord[];
   onNewPR:(pr:PRInfo)=>void;
   startTimestamp?:number;
+  allExercises:string[];
+  workoutExercises:WorkoutExerciseRow[];
+  onCustomExerciseSaved?:()=>void;
 }){
+  // CHANGE 4: disable PR celebration popup (set to true to re-enable)
+  const PR_CELEBRATIONS_ENABLED=false;
   const[startTime]=useState(()=>startTimestamp||Date.now());
   const[elapsed,setElapsed]=useState(0);
   const[restDurations,setRestDurations]=useState<Record<string,number>>({});
@@ -630,6 +700,8 @@ function ActiveScreen({
   const[sessionNote,setSessionNote]=useState("");
   const[noteOpenIdx,setNoteOpenIdx]=useState<number|null>(null);
   const[prBadges,setPrBadges]=useState<Record<number,PRTier>>({});
+  const[showAddExSheet,setShowAddExSheet]=useState(false);
+  const[addExSearch,setAddExSearch]=useState("");
 
   useEffect(()=>{
     const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startTime)/1000)),1000);
@@ -683,7 +755,9 @@ function ActiveScreen({
             await dbSavePR(userId,exercises[ei].name,row.weight,row.reps);
             setPrBadges(p=>({...p,[ei]:tier}));
             // Show modal after short delay so burst finishes
-            setTimeout(()=>onNewPR({exerciseName:exercises[ei].name,weight:row.weight,reps:row.reps,estimated1RM:est1rm,tier}),800);
+            if(PR_CELEBRATIONS_ENABLED){
+              setTimeout(()=>onNewPR({exerciseName:exercises[ei].name,weight:row.weight,reps:row.reps,estimated1RM:est1rm,tier}),800);
+            }
           }
         }catch{/* silently ignore */}
       }
@@ -695,8 +769,56 @@ function ActiveScreen({
   return(
     <div style={{background:M.background,minHeight:"100vh"}}>
       {modalEx&&<ExerciseModal name={modalEx} onClose={()=>setModalEx(null)}/>}
-      {swapIdx!==null&&<SwapDrawer exerciseName={exercises[swapIdx]?.name} onSwap={doSwap} onClose={()=>setSwapIdx(null)} allExercises={BASE_EX}/>}
+      {swapIdx!==null&&<SwapDrawer exerciseName={exercises[swapIdx]?.name} onSwap={doSwap} onClose={()=>setSwapIdx(null)} allExercises={allExercises} userId={userId} onCustomAdded={onCustomExerciseSaved}/>}
       {stretchType&&<StretchModal type={stretchType} onClose={()=>setStretchType(null)}/>}
+
+      {/* Add Exercise sheet (Change 6) */}
+      {showAddExSheet&&(()=>{
+        const aeSearch=addExSearch.trim();
+        const aeResults=aeSearch.length>0?allExercises.filter(e=>e.toLowerCase().includes(aeSearch.toLowerCase())).slice(0,8):allExercises.slice(0,12);
+        const aeExact=allExercises.some(e=>e.toLowerCase()===aeSearch.toLowerCase());
+        const aeShowNew=aeSearch.length>1&&!aeExact;
+        const addExToWorkout=async(name:string,isCustom?:boolean)=>{
+          if(isCustom&&userId){
+            try{await dbSaveCustomExercise(userId,name,"","");}catch{}
+            onCustomExerciseSaved?.();
+          }
+          const lastW=getLastWeight(name,workoutExercises);
+          setExercises(p=>[...p,{id:"ae"+Date.now(),name,sets:3,reps:"10",rows:[{weight:lastW,reps:10,done:false},{weight:lastW,reps:10,done:false},{weight:lastW,reps:10,done:false}],note:""}]);
+          setShowAddExSheet(false);setAddExSearch("");
+        };
+        return(
+          <div style={{position:"fixed",inset:0,background:"rgba(28,27,31,.6)",backdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget){setShowAddExSheet(false);setAddExSearch("");}}}>
+            <div style={{width:"100%",maxWidth:430,background:M.surface,borderRadius:"28px 28px 0 0",maxHeight:"90dvh",overflowY:"auto",animation:"slideUp .5s cubic-bezier(.34,1.56,.64,1)"}}>
+              <div className="sheet-handle"/>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px 12px"}}>
+                <div style={{fontSize:22,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>Add Exercise</div>
+                <button onClick={()=>{setShowAddExSheet(false);setAddExSearch("");}} className="m3i" style={{width:44,height:44,background:M.surfaceContainerHighest,color:M.onSurfaceVariant,fontSize:18}}>✕</button>
+              </div>
+              <div style={{padding:"0 20px 14px"}}>
+                <div style={{position:"relative"}}>
+                  <svg style={{position:"absolute",left:18,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={M.onSurfaceVariant} strokeWidth="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input autoFocus value={addExSearch} onChange={e=>setAddExSearch(e.target.value)} placeholder="Search or type any exercise…" style={{width:"100%",background:M.surfaceContainerHighest,border:"none",borderRadius:100,padding:"14px 20px 14px 48px",fontFamily:FONT,fontSize:16,color:M.onSurface,outline:"none"}}/>
+                </div>
+              </div>
+              <div style={{padding:"0 20px 32px"}}>
+                {aeShowNew&&(
+                  <div onClick={()=>addExToWorkout(aeSearch,true)} className="m3b" style={{display:"flex",alignItems:"center",gap:14,padding:"12px 14px",background:M.primaryContainer,borderRadius:20,marginBottom:8,cursor:"pointer",animation:"stagger .2s both"}}>
+                    <div style={{width:48,height:48,borderRadius:14,background:M.primary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,color:M.onPrimary}}>+</div>
+                    <div><div style={{fontSize:14,fontWeight:700,color:M.onPrimaryContainer,fontFamily:FONT}}>Add "{aeSearch}" as new exercise</div><div style={{fontSize:12,color:M.onPrimaryContainer,opacity:.75,fontFamily:FONT}}>Tap to add to workout →</div></div>
+                  </div>
+                )}
+                {aeResults.map((ex,i)=>(
+                  <div key={i} onClick={()=>addExToWorkout(ex)} className="m3b" style={{display:"flex",alignItems:"center",gap:14,padding:"12px 14px",background:M.surfaceContainerHigh,borderRadius:20,marginBottom:8,cursor:"pointer",animation:`stagger .25s ${i*40}ms both`}}>
+                    <ExerciseTile name={ex} onTap={e=>e.stopPropagation()} size={48}/>
+                    <div><div style={{fontSize:14,fontWeight:700,color:M.onSurface,fontFamily:FONT}}>{ex}</div><div style={{fontSize:12,color:M.onSurfaceVariant,fontFamily:FONT}}>Tap to add to workout</div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       <SetBurst show={burst}/>
 
       {/* Rest Timer */}
@@ -774,7 +896,7 @@ function ActiveScreen({
               <div key={si} className="fast" style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr 48px",gap:8,padding:"6px 16px",background:s.done?`${M.primaryContainer}70`:"transparent",alignItems:"center"}}>
                 <span style={{fontSize:12,fontWeight:700,color:s.done?M.primary:M.onSurfaceVariant,fontFamily:FONT}}>{si+1}</span>
                 <input type="number" inputMode="numeric" value={s.weight} onChange={e=>{const v=parseFloat(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j===si?{...r,weight:v}:j>si&&!r.done?{...r,weight:v}:r)}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
-                <input type="number" inputMode="numeric" value={s.reps} onChange={e=>{const v=parseInt(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j!==si?r:{...r,reps:v})}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
+                <input type="number" inputMode="numeric" value={s.reps} onChange={e=>{const v=parseInt(e.target.value)||0;setExercises(p=>p.map((ex2,i)=>i!==ei?ex2:{...ex2,rows:ex2.rows.map((r,j)=>j===si?{...r,reps:v}:j>si&&!r.done?{...r,reps:v}:r)}));}} className="fast" style={{background:s.done?M.primaryContainer:M.surfaceContainerHighest,border:"none",borderRadius:12,padding:"9px 12px",fontSize:16,fontWeight:700,color:s.done?M.onPrimaryContainer:M.onSurface,fontFamily:FONT,outline:"none",width:"100%",textAlign:"center"}}/>
                 <button onClick={()=>toggle(ei,si)} className="m3i spring" style={{width:44,height:44,border:`2px solid ${s.done?M.primary:M.outline}`,background:s.done?M.primary:"transparent",color:s.done?M.onPrimary:M.outline}}>
                   {s.done&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>
@@ -790,6 +912,8 @@ function ActiveScreen({
           <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:M.onTertiaryContainer,fontFamily:FONT}}>Cool-Down Stretches</div><div style={{fontSize:11,color:M.onTertiaryContainer,opacity:.75,fontFamily:FONT}}>Tap after your last set</div></div>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={M.onTertiaryContainer} strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
+        {/* Change 6: Add Exercise button */}
+        <button onClick={()=>setShowAddExSheet(true)} className="m3b" style={{width:"100%",background:"transparent",border:`1.5px dashed ${M.outlineVariant}`,borderRadius:14,color:M.primary,padding:"12px",fontSize:14,fontWeight:700,fontFamily:FONT,marginTop:12}}>+ Add Exercise</button>
       </div>
     </div>
   );
@@ -1382,6 +1506,9 @@ export default function FittyApp(){
             allPRs={personalRecords}
             onNewPR={pr=>setPendingPR(pr)}
             startTimestamp={workoutStartTime}
+            allExercises={allExercises}
+            workoutExercises={workoutExercises}
+            onCustomExerciseSaved={()=>userId&&dbLoadCustomExercises(userId).then(setCustomExercises)}
           />
         )}
         {screen==="running"&&(
