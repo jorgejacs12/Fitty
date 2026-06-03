@@ -20,9 +20,13 @@ import {
   dbLoadWorkoutsWithExercises, dbLoadPRs, dbSavePR, dbGetBestPR,
   dbLoadBodyMetrics, dbSaveBodyMetric, dbLoadCustomExercises, dbSaveCustomExercise,
   dbLoadRunsFull, dbUpdateRun,
+  dbLoadUserRoutines, dbSeedUserRoutines, dbUpdateUserRoutine,
+  dbInsertUserRoutineExercise, dbUpdateUserRoutineExercise,
+  dbDeleteUserRoutineExercise, dbReorderUserRoutineExercises,
   epley1RM,
   type WorkoutExerciseRow, type PersonalRecord, type BodyMetric,
   type CustomExercise, type Run,
+  type UserRoutineRow, type UserRoutineExerciseRow,
 } from "./lib/db";
 
 export type { WorkoutLog };
@@ -301,11 +305,30 @@ const SUBS:Record<string,Sub[]>={
 const DEF_SUBS:Sub[]=[{name:"DB Variation",reason:"Dumbbell version",match:90},{name:"Machine Equivalent",reason:"Guided machine",match:85},{name:"Bodyweight Version",reason:"No equipment",match:75}];
 
 // ── Interfaces ────────────────────────────────────────────────────────────
-interface Exercise{id:string;name:string;sets:number;reps:string;defaultWeight?:number;}
-interface Routine{id:number;name:string;emoji:string;tag:string;lastDone:string;daysAgo:number;duration:string;exercises:Exercise[];}
+interface Exercise{id:string;dbId?:string;name:string;sets:number;reps:string;defaultWeight?:number;}
+interface Routine{id:number;dbId?:string;name:string;emoji:string;tag:string;lastDone:string;daysAgo:number;duration:string;exercises:Exercise[];}
 interface SetRow{weight:number;reps:number;done:boolean;}
 interface ActiveExercise extends Exercise{rows:SetRow[];note:string;}
 interface WorkoutLog{id:string;routine_name:string;routine_emoji:string;completed_at:string;duration_seconds:number;total_sets:number;total_volume_kg:number;xp_earned:number;}
+
+function rowsToRoutines(rRows:UserRoutineRow[],eRows:UserRoutineExerciseRow[],workoutLogs:WorkoutLog[]):Routine[]{
+  const lastByName:Record<string,string>={};
+  workoutLogs.forEach(w=>{const ex=lastByName[w.routine_name];if(!ex||w.completed_at>ex)lastByName[w.routine_name]=w.completed_at;});
+  return rRows.map(r=>{
+    const iso=lastByName[r.name];
+    let lastDone="Never",daysAgo=999;
+    if(iso){const ms=Date.now()-new Date(iso).getTime();daysAgo=Math.floor(ms/(1000*60*60*24));lastDone=daysAgo===0?"Today":daysAgo===1?"Yesterday":`${daysAgo} days ago`;}
+    const idNum=parseInt(r.routine_id);
+    return{
+      id:Number.isFinite(idNum)?idNum:Date.now()+Math.floor(Math.random()*1000),
+      dbId:r.id,name:r.name,emoji:r.emoji||"",tag:r.tag||"",lastDone,daysAgo,duration:r.duration||"60 min",
+      exercises:eRows.filter(e=>e.user_routine_id===r.id).map(e=>({
+        id:e.exercise_id||`ex_${e.id.slice(0,8)}`,
+        dbId:e.id,name:e.name,sets:e.sets||3,reps:e.reps||"10",
+      })),
+    };
+  });
+}
 
 const INIT:Routine[]=[
   {id:1,name:"Pull Day",emoji:"🏋️",tag:"Back · Biceps · Rear Delts",lastDone:"2 days ago",daysAgo:2,duration:"60 min",exercises:[{id:"e7",name:"Deadlift",sets:4,reps:"5–6"},{id:"e8",name:"Barbell Rows",sets:4,reps:"8–10"},{id:"e9",name:"Lat Pulldown",sets:3,reps:"10–12"},{id:"e10",name:"Seated Cable Row",sets:3,reps:"10–12"},{id:"e11",name:"Face Pull",sets:3,reps:"15–20"},{id:"e12",name:"Barbell Curls",sets:3,reps:"10–12"}]},
@@ -389,23 +412,107 @@ function loadSession():SavedSession|null{
 function clearSession(){localStorage.removeItem(SESSION_KEY);}
 
 // ── CSV Export ────────────────────────────────────────────────────────────
-function exportCSV(logs:WorkoutLog[],runs:Run[],prs:PersonalRecord[],metrics:BodyMetric[]){
+function csvEscape(v:string|number|undefined|null):string{
+  if(v===undefined||v===null)return"";
+  const s=String(v);
+  if(s.includes(",")||s.includes("\"")||s.includes("\n"))return`"${s.replace(/"/g,'""')}"`;
+  return s;
+}
+function exportCSV(logs:WorkoutLog[],runs:Run[],prs:PersonalRecord[],metrics:BodyMetric[],workoutExercises:WorkoutExerciseRow[]){
   const rows:string[]=[];
-  rows.push("=== WORKOUTS ===");
-  rows.push("Date,Routine,Sets,Volume (kg),Duration,XP");
-  logs.forEach(w=>rows.push(`${w.completed_at.slice(0,10)},${w.routine_name},${w.total_sets},${w.total_volume_kg.toFixed(0)},${fmtDur(w.duration_seconds)},${w.xp_earned}`));
+
+  // Build workout_id -> log map
+  const logById:Record<string,WorkoutLog>={};
+  logs.forEach(w=>{logById[w.id]=w;});
+
+  // Group exercises by workout_id and exercise_name to preserve ordering
+  const byWorkout:Record<string,WorkoutExerciseRow[]>={};
+  workoutExercises.forEach(we=>{(byWorkout[we.workout_id]=byWorkout[we.workout_id]||[]).push(we);});
+
+  // ── 1. Per-set rows ─────────────────────────────────────────────────────
+  rows.push("=== SETS ===");
+  rows.push("Date,Routine Name,Exercise Name,Set Number,Weight (lbs),Reps,Sets Completed,Total Sets,Duration (min)");
+  logs.forEach(w=>{
+    const exs=byWorkout[w.id]||[];
+    const durMin=Math.round(w.duration_seconds/60);
+    exs.forEach(ex=>{
+      const sets=ex.sets_json||[];
+      const completed=sets.filter(s=>s.done).length;
+      const total=sets.length;
+      sets.forEach((s,i)=>{
+        rows.push([
+          w.completed_at.slice(0,10),
+          csvEscape(w.routine_name),
+          csvEscape(ex.exercise_name),
+          i+1,
+          s.weight,
+          s.reps,
+          completed,
+          total,
+          durMin,
+        ].join(","));
+      });
+    });
+  });
+
+  // ── 2. Session summaries ───────────────────────────────────────────────
+  rows.push("");
+  rows.push("=== WORKOUT SESSIONS ===");
+  rows.push("Date,Routine Name,Total Exercises,Total Sets Completed,Total Volume (lbs),Duration (min),XP Earned");
+  logs.forEach(w=>{
+    const exs=byWorkout[w.id]||[];
+    const totalEx=exs.length;
+    const totalSetsCompleted=exs.reduce((a,ex)=>a+(ex.sets_json||[]).filter(s=>s.done).length,0);
+    const durMin=Math.round(w.duration_seconds/60);
+    rows.push([
+      w.completed_at.slice(0,10),
+      csvEscape(w.routine_name),
+      totalEx||"",
+      totalSetsCompleted||w.total_sets,
+      w.total_volume_kg.toFixed(0),
+      durMin,
+      w.xp_earned,
+    ].join(","));
+  });
+
+  // ── 3. Runs ────────────────────────────────────────────────────────────
   rows.push("");
   rows.push("=== RUNS ===");
   rows.push("Date,Distance (mi),Duration,Pace,Route,HR,Notes");
-  runs.forEach(r=>rows.push(`${r.ran_at.slice(0,10)},${r.distance_miles.toFixed(2)},${fmtDur(r.duration_seconds)},${fmtPace(r.distance_miles,r.duration_seconds)},${r.route_name||""},${r.heart_rate_avg||""},${r.notes||""}`));
+  runs.forEach(r=>rows.push([
+    r.ran_at.slice(0,10),
+    r.distance_miles.toFixed(2),
+    fmtDur(r.duration_seconds),
+    fmtPace(r.distance_miles,r.duration_seconds),
+    csvEscape(r.route_name||""),
+    r.heart_rate_avg||"",
+    csvEscape(r.notes||""),
+  ].join(",")));
+
+  // ── 4. Personal records ────────────────────────────────────────────────
   rows.push("");
   rows.push("=== PERSONAL RECORDS ===");
-  rows.push("Date,Exercise,Weight (kg),Reps,Est. 1RM (kg)");
-  prs.forEach(p=>rows.push(`${p.achieved_at.slice(0,10)},${p.exercise_name},${p.weight},${p.reps},${p.estimated_1rm.toFixed(1)}`));
+  rows.push("Date,Exercise,Weight (lbs),Reps,Est. 1RM (lbs)");
+  prs.forEach(p=>rows.push([
+    p.achieved_at.slice(0,10),
+    csvEscape(p.exercise_name),
+    p.weight,
+    p.reps,
+    p.estimated_1rm.toFixed(1),
+  ].join(",")));
+
+  // ── 5. Body metrics ────────────────────────────────────────────────────
   rows.push("");
   rows.push("=== BODY METRICS ===");
-  rows.push("Date,Bodyweight (kg),Body Fat %,Neck (cm),Waist (cm),Hips (cm)");
-  metrics.forEach(m=>rows.push(`${m.logged_at.slice(0,10)},${m.bodyweight},${m.body_fat_pct||""},${m.neck_cm||""},${m.waist_cm||""},${m.hip_cm||""}`));
+  rows.push("Date,Bodyweight (lbs),Body Fat %,Neck (cm),Waist (cm),Hips (cm)");
+  metrics.forEach(m=>rows.push([
+    m.logged_at.slice(0,10),
+    m.bodyweight,
+    m.body_fat_pct||"",
+    m.neck_cm||"",
+    m.waist_cm||"",
+    m.hip_cm||"",
+  ].join(",")));
 
   const blob=new Blob([rows.join("\n")],{type:"text/csv"});
   const url=URL.createObjectURL(blob);
@@ -1016,11 +1123,13 @@ const TONES=[
   {bg:M.orangeContainer,fg:M.onOrangeContainer,btn:M.orangePrimary,btnFg:"#fff"},
 ];
 
-function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStartProgramDay}:{routines:Routine[];setRoutines:React.Dispatch<React.SetStateAction<Routine[]>>;onStart:(r:Routine)=>void;allExercises:string[];userId:string;onStartProgramDay:(day:ProgramDay,blocks:ProgramBlock[],exercises:ProgramExercise[],programId:string)=>void;}){
+function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStartProgramDay,loading,onPersistError}:{routines:Routine[];setRoutines:React.Dispatch<React.SetStateAction<Routine[]>>;onStart:(r:Routine)=>void;allExercises:string[];userId:string;onStartProgramDay:(day:ProgramDay,blocks:ProgramBlock[],exercises:ProgramExercise[],programId:string)=>void;loading:boolean;onPersistError:(msg:string)=>void;}){
   const[open,setOpen]=useState<number|null>(null);
   const[editing,setEditing]=useState<number|null>(null);
   const[renaming,setRenaming]=useState<{rIdx:number;eIdx:number}|null>(null);
   const[renameVal,setRenameVal]=useState("");
+  const[routineRenaming,setRoutineRenaming]=useState<{rIdx:number;field:"name"|"emoji"|"tag"}|null>(null);
+  const[routineRenameVal,setRoutineRenameVal]=useState("");
   const[addingEx,setAddingEx]=useState(false);
   const[exSearch,setExSearch]=useState("");
   const[newExName,setNewExName]=useState("");
@@ -1030,11 +1139,88 @@ function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStar
   const[showCustomModal,setShowCustomModal]=useState(false);
 
   const exResults=exSearch.trim().length>1?allExercises.filter(e=>e.toLowerCase().includes(exSearch.toLowerCase())).slice(0,5):[];
-  const moveEx=(rIdx:number,from:number,to:number)=>{if(to<0||to>=routines[rIdx].exercises.length)return;setRoutines(p=>p.map((r,ri)=>{if(ri!==rIdx)return r;const exs=[...r.exercises];const[m]=exs.splice(from,1);exs.splice(to,0,m);return{...r,exercises:exs};}));};
-  const commitRename=()=>{if(!renaming||!renameVal.trim()){setRenaming(null);return;}setRoutines(p=>p.map((r,ri)=>ri!==renaming.rIdx?r:{...r,exercises:r.exercises.map((e,ei)=>ei!==renaming.eIdx?e:{...e,name:renameVal.trim()})}));setRenaming(null);};
-  const removeEx=(rIdx:number,eIdx:number)=>setRoutines(p=>p.map((r,ri)=>ri!==rIdx?r:{...r,exercises:r.exercises.filter((_,ei)=>ei!==eIdx)}));
-  const addEx=(rIdx:number,name?:string)=>{const nm=(name||newExName).trim();if(!nm)return;setRoutines(p=>p.map((r,ri)=>ri!==rIdx?r:{...r,exercises:[...r.exercises,{id:"ex"+Date.now(),name:nm,sets:3,reps:"10–12"}]}));setNewExName("");setExSearch("");setAddingEx(false);};
-  const doPreSwap=(sub:Partial<Sub>)=>{if(!preSwap)return;setRoutines(p=>p.map((r,ri)=>ri!==preSwap.rIdx?r:{...r,exercises:r.exercises.map((e,ei)=>ei!==preSwap.eIdx?e:{...e,name:sub.name||e.name})}));setPreSwap(null);};
+
+  // Fire-and-forget persistence helper with revert on failure
+  const persist=async<T,>(action:()=>Promise<T>,snapshot:Routine[],errMsg:string):Promise<void>=>{
+    try{await action();}catch{setRoutines(snapshot);onPersistError(errMsg);}
+  };
+
+  const moveEx=(rIdx:number,from:number,to:number)=>{
+    if(to<0||to>=routines[rIdx].exercises.length)return;
+    const snapshot=routines;
+    let reorderedDbIds:Array<{id:string;sort_order:number}>=[];
+    setRoutines(p=>p.map((r,ri)=>{
+      if(ri!==rIdx)return r;
+      const exs=[...r.exercises];
+      const[m]=exs.splice(from,1);
+      exs.splice(to,0,m);
+      reorderedDbIds=exs.map((e,i)=>e.dbId?{id:e.dbId,sort_order:i}:null).filter((x):x is{id:string;sort_order:number}=>!!x);
+      return{...r,exercises:exs};
+    }));
+    if(reorderedDbIds.length)persist(()=>dbReorderUserRoutineExercises(reorderedDbIds),snapshot,"Failed to reorder");
+  };
+
+  const commitRename=()=>{
+    if(!renaming||!renameVal.trim()){setRenaming(null);return;}
+    const newName=renameVal.trim();
+    const snapshot=routines;
+    const target=routines[renaming.rIdx]?.exercises[renaming.eIdx];
+    const dbId=target?.dbId;
+    setRoutines(p=>p.map((r,ri)=>ri!==renaming.rIdx?r:{...r,exercises:r.exercises.map((e,ei)=>ei!==renaming.eIdx?e:{...e,name:newName})}));
+    setRenaming(null);
+    if(dbId)persist(()=>dbUpdateUserRoutineExercise(dbId,{name:newName}),snapshot,"Failed to rename exercise");
+  };
+
+  const removeEx=(rIdx:number,eIdx:number)=>{
+    const snapshot=routines;
+    const target=routines[rIdx]?.exercises[eIdx];
+    const dbId=target?.dbId;
+    setRoutines(p=>p.map((r,ri)=>ri!==rIdx?r:{...r,exercises:r.exercises.filter((_,ei)=>ei!==eIdx)}));
+    if(dbId)persist(()=>dbDeleteUserRoutineExercise(dbId),snapshot,"Failed to remove exercise");
+  };
+
+  const addEx=async(rIdx:number,name?:string)=>{
+    const nm=(name||newExName).trim();if(!nm)return;
+    const snapshot=routines;
+    const tempId="ex"+Date.now();
+    const routineDbId=routines[rIdx]?.dbId;
+    const sortOrder=routines[rIdx]?.exercises.length||0;
+    setRoutines(p=>p.map((r,ri)=>ri!==rIdx?r:{...r,exercises:[...r.exercises,{id:tempId,name:nm,sets:3,reps:"10–12"}]}));
+    setNewExName("");setExSearch("");setAddingEx(false);
+    if(routineDbId){
+      try{
+        const row=await dbInsertUserRoutineExercise(userId,routineDbId,{name:nm,sets:3,reps:"10–12",sort_order:sortOrder});
+        if(row){
+          setRoutines(p=>p.map((r,ri)=>ri!==rIdx?r:{...r,exercises:r.exercises.map(e=>e.id===tempId?{...e,dbId:row.id}:e)}));
+        }
+      }catch{setRoutines(snapshot);onPersistError("Failed to add exercise");}
+    }
+  };
+
+  const doPreSwap=(sub:Partial<Sub>)=>{
+    if(!preSwap)return;
+    const newName=sub.name;
+    if(!newName){setPreSwap(null);return;}
+    const snapshot=routines;
+    const target=routines[preSwap.rIdx]?.exercises[preSwap.eIdx];
+    const dbId=target?.dbId;
+    setRoutines(p=>p.map((r,ri)=>ri!==preSwap.rIdx?r:{...r,exercises:r.exercises.map((e,ei)=>ei!==preSwap.eIdx?e:{...e,name:newName})}));
+    setPreSwap(null);
+    if(dbId)persist(()=>dbUpdateUserRoutineExercise(dbId,{name:newName}),snapshot,"Failed to swap exercise");
+  };
+
+  const commitRoutineRename=()=>{
+    if(!routineRenaming){return;}
+    const val=routineRenameVal.trim();
+    if(!val){setRoutineRenaming(null);return;}
+    const field=routineRenaming.field;
+    const snapshot=routines;
+    const target=routines[routineRenaming.rIdx];
+    const dbId=target?.dbId;
+    setRoutines(p=>p.map((r,ri)=>ri!==routineRenaming.rIdx?r:{...r,[field]:val}));
+    setRoutineRenaming(null);
+    if(dbId)persist(()=>dbUpdateUserRoutine(dbId,{[field]:val}),snapshot,"Failed to update routine");
+  };
 
   const handleSaveCustom=async(name:string,muscleGroup:string,equipment:string)=>{
     await dbSaveCustomExercise(userId,name,muscleGroup,equipment);
@@ -1060,18 +1246,55 @@ function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStar
         <div style={{fontSize:18,fontWeight:900,color:M.onSurface,fontFamily:FONT}}>My Routines</div>
       </div>
 
-      {routines.map((r,rIdx)=>{
+      {loading&&(
+        <div style={{margin:"0 16px 12px",padding:"32px 20px",background:M.surfaceContainerHighest,borderRadius:28,textAlign:"center",color:M.onSurfaceVariant,fontFamily:FONT,fontSize:13}}>
+          <div style={{display:"inline-block",width:24,height:24,border:`3px solid ${M.outlineVariant}`,borderTopColor:M.primary,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+          <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+          <div style={{marginTop:10}}>Loading routines…</div>
+        </div>
+      )}
+
+      {!loading&&routines.map((r,rIdx)=>{
         const isOpen=open===r.id,isEditing=editing===rIdx,tone=TONES[rIdx%TONES.length];
+        const isRouteRenaming=(field:"name"|"emoji"|"tag")=>routineRenaming?.rIdx===rIdx&&routineRenaming?.field===field;
+        const startRoutineRename=(field:"name"|"emoji"|"tag")=>{setRoutineRenaming({rIdx,field});setRoutineRenameVal(field==="name"?r.name:field==="emoji"?r.emoji:r.tag);};
         return(
           <div key={r.id} style={{margin:"0 16px 12px",animation:`stagger .3s ${rIdx*50}ms both`}}>
             <div onClick={()=>{if(!isEditing)setOpen(isOpen?null:r.id);}} className="m3b" style={{background:isOpen?tone.bg:M.surfaceContainerHighest,borderRadius:isOpen?"28px 28px 0 0":28,padding:20,cursor:isEditing?"default":"pointer",transition:"background .25s,border-radius .25s"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-                    <span style={{fontSize:30}}>{r.emoji}</span>
-                    <span style={{fontSize:20,fontWeight:900,color:isOpen?tone.fg:M.onSurface,fontFamily:FONT,letterSpacing:"-.3px"}}>{r.name}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                    {isEditing&&isRouteRenaming("emoji")?(
+                      <input autoFocus value={routineRenameVal} onChange={e=>setRoutineRenameVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")commitRoutineRename();if(e.key==="Escape")setRoutineRenaming(null);}} onClick={e=>e.stopPropagation()} style={{width:60,background:M.surfaceContainerHighest,border:`2px solid ${M.primary}`,borderRadius:12,padding:"4px 8px",fontSize:24,textAlign:"center",fontFamily:FONT,color:M.onSurface,outline:"none"}}/>
+                    ):(
+                      <span onClick={e=>{if(isEditing){e.stopPropagation();startRoutineRename("emoji");}}} style={{fontSize:30,cursor:isEditing?"pointer":"default",borderBottom:isEditing?`1.5px dashed ${tone.fg}`:"none"}}>{r.emoji}</span>
+                    )}
+                    {isEditing&&isRouteRenaming("name")?(
+                      <div style={{display:"flex",gap:6,alignItems:"center",flex:1}} onClick={e=>e.stopPropagation()}>
+                        <input autoFocus value={routineRenameVal} onChange={e=>setRoutineRenameVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")commitRoutineRename();if(e.key==="Escape")setRoutineRenaming(null);}} style={{flex:1,background:M.surface,border:`2px solid ${M.primary}`,borderRadius:14,padding:"6px 12px",fontSize:18,fontWeight:800,fontFamily:FONT,color:M.onSurface,outline:"none"}}/>
+                        <button onClick={commitRoutineRename} className="m3b" style={{background:M.primary,color:M.onPrimary,borderRadius:12,padding:"6px 10px",fontWeight:700,fontSize:13,fontFamily:FONT}}>✓</button>
+                        <button onClick={()=>setRoutineRenaming(null)} className="m3b" style={{background:M.surfaceContainerHighest,color:M.onSurfaceVariant,borderRadius:12,padding:"6px 10px",fontSize:13,fontFamily:FONT}}>✕</button>
+                      </div>
+                    ):(
+                      <>
+                        <span style={{fontSize:20,fontWeight:900,color:isOpen?tone.fg:M.onSurface,fontFamily:FONT,letterSpacing:"-.3px"}}>{r.name}</span>
+                        {isEditing&&(
+                          <button onClick={e=>{e.stopPropagation();startRoutineRename("name");}} className="m3i" style={{width:28,height:28,background:"rgba(0,0,0,.08)",color:isOpen?tone.fg:M.onSurfaceVariant}} aria-label="Rename routine">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
-                  <div style={{fontSize:13,color:isOpen?tone.fg:M.onSurfaceVariant,fontFamily:FONT,marginBottom:12,opacity:.85}}>{r.tag}</div>
+                  {isEditing&&isRouteRenaming("tag")?(
+                    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}} onClick={e=>e.stopPropagation()}>
+                      <input autoFocus value={routineRenameVal} onChange={e=>setRoutineRenameVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")commitRoutineRename();if(e.key==="Escape")setRoutineRenaming(null);}} style={{flex:1,background:M.surface,border:`2px solid ${M.primary}`,borderRadius:12,padding:"6px 12px",fontSize:13,fontFamily:FONT,color:M.onSurface,outline:"none"}}/>
+                      <button onClick={commitRoutineRename} className="m3b" style={{background:M.primary,color:M.onPrimary,borderRadius:10,padding:"6px 10px",fontWeight:700,fontSize:12,fontFamily:FONT}}>✓</button>
+                      <button onClick={()=>setRoutineRenaming(null)} className="m3b" style={{background:M.surfaceContainerHighest,color:M.onSurfaceVariant,borderRadius:10,padding:"6px 10px",fontSize:12,fontFamily:FONT}}>✕</button>
+                    </div>
+                  ):(
+                    <div onClick={e=>{if(isEditing){e.stopPropagation();startRoutineRename("tag");}}} style={{fontSize:13,color:isOpen?tone.fg:M.onSurfaceVariant,fontFamily:FONT,marginBottom:12,opacity:.85,cursor:isEditing?"pointer":"default",borderBottom:isEditing?`1.5px dashed ${tone.fg}`:"none",display:"inline-block"}}>{r.tag||(isEditing?"Tap to add tag":"")}</div>
+                  )}
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                     {[`⏱ ${r.duration}`,`${r.exercises.length} exercises`].map(label=>(
                       <span key={label} style={{fontSize:11,fontWeight:600,background:"rgba(0,0,0,.1)",color:isOpen?tone.fg:M.onSurfaceVariant,padding:"4px 12px",borderRadius:100,fontFamily:FONT}}>{label}</span>
@@ -1080,7 +1303,7 @@ function RoutinesScreen({routines,setRoutines,onStart,allExercises,userId,onStar
                   </div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:10,alignItems:"flex-end",marginLeft:12}}>
-                  <button onClick={e=>{e.stopPropagation();if(!isEditing){setEditing(rIdx);setOpen(r.id);}else setEditing(null);}} className="m3b" style={{background:isEditing?tone.btn:M.surfaceContainer,color:isEditing?tone.btnFg:M.onSurfaceVariant,borderRadius:100,padding:"7px 16px",fontSize:12,fontWeight:700,fontFamily:FONT}}>{isEditing?"Done":"Edit"}</button>
+                  <button onClick={e=>{e.stopPropagation();if(!isEditing){setEditing(rIdx);setOpen(r.id);}else{setEditing(null);setRoutineRenaming(null);}}} className="m3b" style={{background:isEditing?tone.btn:M.surfaceContainer,color:isEditing?tone.btnFg:M.onSurfaceVariant,borderRadius:100,padding:"7px 16px",fontSize:12,fontWeight:700,fontFamily:FONT}}>{isEditing?"Done":"Edit"}</button>
                   <svg className="spring" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isOpen?tone.fg:M.onSurfaceVariant} strokeWidth="2.2" style={{transform:isOpen?"rotate(180deg)":"none",marginTop:2}}><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
               </div>
@@ -1276,7 +1499,9 @@ export default function FittyApp(){
   const[routine,setRoutine]=useState<Routine|null>(null);
   const[activeProgramDayId,setActiveProgramDayId]=useState<string|null>(null);
   const[activeProgramId,setActiveProgramId]=useState<string|null>(null);
-  const[routines,setRoutines]=useState<Routine[]>(INIT);
+  const[routines,setRoutines]=useState<Routine[]>([]);
+  const[routinesLoading,setRoutinesLoading]=useState(true);
+  const[routineError,setRoutineError]=useState<string|null>(null);
   const[calendarOpen,setCalendarOpen]=useState(false);
   const[workoutLogs,setWorkoutLogs]=useState<WorkoutLog[]>([]);
   const[runs,setRuns]=useState<Run[]>([]);
@@ -1300,7 +1525,8 @@ export default function FittyApp(){
   const allExercises=useMemo(()=>[...BASE_EX,...customExercises.map(c=>c.name)],[customExercises]);
 
   const loadAll=async(uid:string)=>{
-    dbLoadWorkouts(uid).then(setWorkoutLogs);
+    const logs=await dbLoadWorkouts(uid);
+    setWorkoutLogs(logs);
     dbLoadRunsFull(uid).then(setRuns);
     dbLoadWorkoutsWithExercises(uid).then(setWorkoutExercises);
     dbLoadPRs(uid).then(setPersonalRecords);
@@ -1309,6 +1535,24 @@ export default function FittyApp(){
     // Load longest streak from profiles
     supabase.from("profiles").select("longest_streak").eq("id",uid).maybeSingle()
       .then(({data})=>{ if(data)setLongestStreak((data as {longest_streak:number}).longest_streak||0); });
+    // Load user routines — seed from INIT if empty
+    setRoutinesLoading(true);
+    try{
+      let{routines:rRows,exercises:eRows}=await dbLoadUserRoutines(uid);
+      if(rRows.length===0){
+        const seeded=await dbSeedUserRoutines(uid,INIT.map(r=>({
+          routine_id:String(r.id),name:r.name,emoji:r.emoji,tag:r.tag,duration:r.duration,
+          exercises:r.exercises.map(e=>({exercise_id:e.id,name:e.name,sets:e.sets,reps:e.reps})),
+        })));
+        rRows=seeded.routines;eRows=seeded.exercises;
+      }
+      setRoutines(rowsToRoutines(rRows,eRows,logs));
+    }catch{
+      // On fatal load error fall back to INIT in-memory (no persistence)
+      setRoutines(INIT);
+    }finally{
+      setRoutinesLoading(false);
+    }
   };
 
   // Check for unfinished session on mount
@@ -1342,6 +1586,7 @@ export default function FittyApp(){
         setLoggedIn(false);
         setUserName("");setUserAvatar("");setUserEmail("");setUserId("");
         setWorkoutLogs([]);setRuns([]);setWorkoutExercises([]);setPersonalRecords([]);setBodyMetrics([]);
+        setRoutines([]);setRoutinesLoading(true);
       }
     });
     return()=>subscription.unsubscribe();
@@ -1391,7 +1636,7 @@ export default function FittyApp(){
     if(userId){await dbSaveBodyMetric(userId,bw,opts);dbLoadBodyMetrics(userId).then(setBodyMetrics);}
   };
 
-  const handleExport=()=>exportCSV(workoutLogs,runs,personalRecords,bodyMetrics);
+  const handleExport=()=>exportCSV(workoutLogs,runs,personalRecords,bodyMetrics,workoutExercises);
 
   const handleWeeklyGoalChange=(n:number)=>{
     setWeeklyGoal(n);
@@ -1473,6 +1718,11 @@ export default function FittyApp(){
           </div>
         )}
 
+        {/* Routine save error toast */}
+        {routineError&&(
+          <div style={{position:"fixed",bottom:104,left:"50%",transform:"translateX(-50%)",background:M.errorContainer,color:M.onErrorContainer,borderRadius:100,padding:"10px 18px",fontSize:13,fontWeight:700,fontFamily:FONT,zIndex:550,animation:"slideUp .3s cubic-bezier(.34,1.56,.64,1)",boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>{routineError}</div>
+        )}
+
         {/* Top bar */}
         {screen!=="active"&&(
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 16px 16px"}}>
@@ -1496,7 +1746,7 @@ export default function FittyApp(){
 
         {/* Screens */}
         {screen==="home"&&<HomeScreen onStartWorkout={()=>{setScreen("routines");setActiveNav("workout");}} onOpenCalendar={()=>setCalendarOpen(true)} firstName={firstName} weeklyStreak={weeklyStreak} thisWeekCount={thisWeekCount} weeklyGoal={weeklyGoal} prCount={prCount} routineFatigue={routineFatigue} onStreakTap={()=>setStreakSheetOpen(true)} onPRTap={()=>setPrSheetOpen(true)}/>}
-        {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} onStart={r=>{setWorkoutStartTime(Date.now());setRoutine({...r,exercises:r.exercises.map(ex=>({...ex,defaultWeight:getLastWeight(ex.name,workoutExercises)}))});setScreen("active");setActiveNav("workout");}} allExercises={allExercises} userId={userId} onStartProgramDay={(day,_blocks,exs,programId)=>{setWorkoutStartTime(Date.now());const r:Routine={id:-1,name:`Day ${day.dayNumber} · ${day.title}`,emoji:"🏋️",tag:"SquatCtober",lastDone:"Today",daysAgo:0,duration:"60 min",exercises:exs.filter(ex=>ex.sets&&ex.sets>0).map(ex=>({id:ex.id,name:ex.exerciseName,sets:ex.sets!,reps:ex.reps||"10",defaultWeight:getLastWeight(ex.exerciseName,workoutExercises)}))};setRoutine(r);setActiveProgramDayId(day.id);setActiveProgramId(programId);setScreen("active");setActiveNav("workout");}}/>}
+        {screen==="routines"&&<RoutinesScreen routines={routines} setRoutines={setRoutines} loading={routinesLoading} onPersistError={msg=>{setRoutineError(msg);setTimeout(()=>setRoutineError(null),3500);}} onStart={r=>{setWorkoutStartTime(Date.now());setRoutine({...r,exercises:r.exercises.map(ex=>({...ex,defaultWeight:getLastWeight(ex.name,workoutExercises)}))});setScreen("active");setActiveNav("workout");}} allExercises={allExercises} userId={userId} onStartProgramDay={(day,_blocks,exs,programId)=>{setWorkoutStartTime(Date.now());const r:Routine={id:-1,name:`Day ${day.dayNumber} · ${day.title}`,emoji:"🏋️",tag:"SquatCtober",lastDone:"Today",daysAgo:0,duration:"60 min",exercises:exs.filter(ex=>ex.sets&&ex.sets>0).map(ex=>({id:ex.id,name:ex.exerciseName,sets:ex.sets!,reps:ex.reps||"10",defaultWeight:getLastWeight(ex.exerciseName,workoutExercises)}))};setRoutine(r);setActiveProgramDayId(day.id);setActiveProgramId(programId);setScreen("active");setActiveNav("workout");}}/>}
         {screen==="active"&&routine&&(
           <ActiveScreen
             routine={routine}

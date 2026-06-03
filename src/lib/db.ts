@@ -223,6 +223,175 @@ export async function dbSaveWorkoutNote(workoutId: string, note: string): Promis
   await supabase.from("workouts").update({ session_note: note }).eq("id", workoutId);
 }
 
+// ── User Routines ──────────────────────────────────────────────────────────
+
+export interface UserRoutineRow {
+  id: string;
+  user_id: string;
+  routine_id: string;
+  name: string;
+  emoji: string | null;
+  tag: string | null;
+  duration: string | null;
+  sort_order: number | null;
+}
+
+export interface UserRoutineExerciseRow {
+  id: string;
+  user_id: string;
+  user_routine_id: string;
+  exercise_id: string | null;
+  name: string;
+  sets: number | null;
+  reps: string | null;
+  sort_order: number | null;
+}
+
+export interface SeedRoutineInput {
+  routine_id: string;
+  name: string;
+  emoji: string;
+  tag: string;
+  duration: string;
+  exercises: Array<{ exercise_id?: string; name: string; sets: number; reps: string }>;
+}
+
+export async function dbLoadUserRoutines(userId: string): Promise<{
+  routines: UserRoutineRow[];
+  exercises: UserRoutineExerciseRow[];
+}> {
+  const [routinesRes, exsRes] = await Promise.all([
+    supabase.from("user_routines").select("*").eq("user_id", userId).order("sort_order", { ascending: true }),
+    supabase.from("user_routine_exercises").select("*").eq("user_id", userId).order("sort_order", { ascending: true }),
+  ]);
+  return {
+    routines: (routinesRes.data as UserRoutineRow[]) || [],
+    exercises: (exsRes.data as UserRoutineExerciseRow[]) || [],
+  };
+}
+
+export async function dbSeedUserRoutines(
+  userId: string,
+  defaults: SeedRoutineInput[],
+): Promise<{ routines: UserRoutineRow[]; exercises: UserRoutineExerciseRow[] }> {
+  const inserted: UserRoutineRow[] = [];
+  const insertedExs: UserRoutineExerciseRow[] = [];
+  for (let i = 0; i < defaults.length; i++) {
+    const r = defaults[i];
+    const { data: routine } = await supabase
+      .from("user_routines")
+      .insert({
+        user_id: userId,
+        routine_id: r.routine_id,
+        name: r.name,
+        emoji: r.emoji,
+        tag: r.tag,
+        duration: r.duration,
+        sort_order: i,
+      })
+      .select()
+      .single();
+    if (!routine) continue;
+    inserted.push(routine as UserRoutineRow);
+    const exRows = r.exercises.map((ex, j) => ({
+      user_id: userId,
+      user_routine_id: (routine as UserRoutineRow).id,
+      exercise_id: ex.exercise_id || null,
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      sort_order: j,
+    }));
+    if (exRows.length) {
+      const { data: exs } = await supabase.from("user_routine_exercises").insert(exRows).select();
+      if (exs) insertedExs.push(...(exs as UserRoutineExerciseRow[]));
+    }
+  }
+  return { routines: inserted, exercises: insertedExs };
+}
+
+export async function dbUpdateUserRoutine(
+  routineDbId: string,
+  fields: Partial<Pick<UserRoutineRow, "name" | "emoji" | "tag" | "duration" | "sort_order">>,
+): Promise<void> {
+  await supabase
+    .from("user_routines")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", routineDbId);
+}
+
+export async function dbInsertUserRoutineExercise(
+  userId: string,
+  userRoutineId: string,
+  ex: { exercise_id?: string; name: string; sets: number; reps: string; sort_order: number },
+): Promise<UserRoutineExerciseRow | null> {
+  const { data } = await supabase
+    .from("user_routine_exercises")
+    .insert({
+      user_id: userId,
+      user_routine_id: userRoutineId,
+      exercise_id: ex.exercise_id || null,
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      sort_order: ex.sort_order,
+    })
+    .select()
+    .single();
+  return data as UserRoutineExerciseRow | null;
+}
+
+export async function dbUpdateUserRoutineExercise(
+  exerciseDbId: string,
+  fields: Partial<Pick<UserRoutineExerciseRow, "name" | "sets" | "reps" | "sort_order">>,
+): Promise<void> {
+  await supabase.from("user_routine_exercises").update(fields).eq("id", exerciseDbId);
+}
+
+export async function dbDeleteUserRoutineExercise(exerciseDbId: string): Promise<void> {
+  await supabase.from("user_routine_exercises").delete().eq("id", exerciseDbId);
+}
+
+export async function dbReorderUserRoutineExercises(updates: Array<{ id: string; sort_order: number }>): Promise<void> {
+  await Promise.all(
+    updates.map(u => supabase.from("user_routine_exercises").update({ sort_order: u.sort_order }).eq("id", u.id))
+  );
+}
+
+// ── Workout sets (per-set rows) ────────────────────────────────────────────
+
+export interface WorkoutSetDetail {
+  workout_id: string;
+  exercise_name: string;
+  set_number: number;
+  weight: number;
+  reps: number;
+  done: boolean;
+}
+
+export async function dbLoadWorkoutSetsForWorkout(workoutId: string): Promise<WorkoutSetDetail[]> {
+  const { data } = await supabase
+    .from("workout_exercises")
+    .select("exercise_name, sets_json")
+    .eq("workout_id", workoutId);
+  if (!data) return [];
+  const rows: WorkoutSetDetail[] = [];
+  for (const w of data) {
+    const sets = ((w as { sets_json: unknown }).sets_json || []) as Array<{ weight: number; reps: number; done: boolean }>;
+    sets.forEach((s, idx) => {
+      rows.push({
+        workout_id: workoutId,
+        exercise_name: (w as { exercise_name: string }).exercise_name,
+        set_number: idx + 1,
+        weight: s.weight,
+        reps: s.reps,
+        done: s.done,
+      });
+    });
+  }
+  return rows;
+}
+
 // ── Epley 1RM ──────────────────────────────────────────────────────────────
 
 export function epley1RM(weight: number, reps: number): number {

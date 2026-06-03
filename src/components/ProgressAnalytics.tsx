@@ -1,10 +1,11 @@
-import { useState, useMemo, type JSX } from "react";
+import { useState, useMemo, useEffect, type JSX } from "react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import type { WorkoutExerciseRow, PersonalRecord } from "../lib/db";
-import { epley1RM } from "../lib/db";
+import { epley1RM, dbLoadWorkoutSetsForWorkout } from "../lib/db";
+import { TigerLogo } from "./TigerLogo";
 
 interface WorkoutLog {
   id: string; routine_name: string; routine_emoji: string;
@@ -198,10 +199,156 @@ function HeatmapCalendar({ logs, runs }: { logs: WorkoutLog[]; runs: Run[] }): J
   );
 }
 
+// ── Workout Detail View ──────────────────────────────────────────────────
+function WorkoutDetailView({ workout, personalRecords, onBack }: { workout: WorkoutLog; personalRecords: PersonalRecord[]; onBack: () => void }): JSX.Element {
+  const [sets, setSets] = useState<Array<{ exercise_name: string; set_number: number; weight: number; reps: number; done: boolean }> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    dbLoadWorkoutSetsForWorkout(workout.id).then(rows => {
+      if (active) { setSets(rows); setLoading(false); }
+    });
+    return () => { active = false; };
+  }, [workout.id]);
+
+  const dateLabel = new Date(workout.completed_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const durMin = Math.round(workout.duration_seconds / 60);
+
+  // Group sets by exercise (preserve insertion order)
+  const grouped = useMemo(() => {
+    if (!sets) return [];
+    const byEx: Record<string, Array<{ set_number: number; weight: number; reps: number; done: boolean }>> = {};
+    const order: string[] = [];
+    sets.forEach(s => {
+      if (!byEx[s.exercise_name]) { byEx[s.exercise_name] = []; order.push(s.exercise_name); }
+      byEx[s.exercise_name].push({ set_number: s.set_number, weight: s.weight, reps: s.reps, done: s.done });
+    });
+    return order.map(name => ({ name, rows: byEx[name] }));
+  }, [sets]);
+
+  const totalSetsCompleted = sets ? sets.filter(s => s.done).length : 0;
+  const totalSetsPlanned = sets ? sets.length : 0;
+
+  // PR detection per (exercise, set) — naive: if a set's est1rm >= the PR row, mark medal
+  const prByExercise = useMemo(() => {
+    const m: Record<string, PersonalRecord> = {};
+    personalRecords.forEach(pr => {
+      const e = m[pr.exercise_name];
+      if (!e || pr.estimated_1rm > e.estimated_1rm) m[pr.exercise_name] = pr;
+    });
+    return m;
+  }, [personalRecords]);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(28,27,31,.6)",
+      backdropFilter: "blur(6px)", zIndex: 500,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={e => { if (e.target === e.currentTarget) onBack(); }}>
+      <div style={{
+        width: "100%", maxWidth: 430, background: "#FFFFFF",
+        borderRadius: "28px 28px 0 0", height: "95dvh", overflowY: "auto",
+        animation: "slideUp .5s cubic-bezier(.34,1.56,.64,1)",
+        fontFamily: FONT, color: "#1C1B1F",
+      }}>
+        {/* Top bar */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 6px", position: "sticky", top: 0, background: "#FFFFFF", zIndex: 2 }}>
+          <button onClick={onBack} className="m3b" style={{ background: M.surfaceContainerHighest, border: "none", borderRadius: 100, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: M.onSurfaceVariant, fontFamily: FONT, cursor: "pointer" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, opacity: .6 }}>
+            <div style={{ width: 22, height: 22, borderRadius: 7, background: M.primary, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <TigerLogo size={16} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: M.onSurface, fontFamily: FONT, letterSpacing: ".3px" }}>Fitty</span>
+          </div>
+        </div>
+
+        {/* Header */}
+        <div style={{ padding: "8px 20px 16px" }}>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#1C1B1F", fontFamily: FONT, letterSpacing: "-.4px", lineHeight: 1.15 }}>
+            <span style={{ fontSize: 30, marginRight: 8 }}>{workout.routine_emoji}</span>{workout.routine_name}
+          </div>
+          <div style={{ fontSize: 13, color: "#49454F", fontFamily: FONT, marginTop: 4 }}>{dateLabel}</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 14 }}>
+            <div style={{ background: M.primaryContainer, borderRadius: 14, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: M.onPrimaryContainer, opacity: .75, fontFamily: FONT, letterSpacing: ".5px", textTransform: "uppercase" }}>Duration</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: M.onPrimaryContainer, fontFamily: FONT, marginTop: 2 }}>{durMin} min</div>
+            </div>
+            <div style={{ background: M.secondaryContainer, borderRadius: 14, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: M.onSecondaryContainer, opacity: .75, fontFamily: FONT, letterSpacing: ".5px", textTransform: "uppercase" }}>Volume</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: M.onSecondaryContainer, fontFamily: FONT, marginTop: 2 }}>{Math.round(workout.total_volume_kg).toLocaleString()}<span style={{ fontSize: 11, marginLeft: 3, opacity: .7 }}>lbs</span></div>
+            </div>
+            <div style={{ background: M.tertiaryContainer, borderRadius: 14, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: M.onTertiaryContainer, opacity: .75, fontFamily: FONT, letterSpacing: ".5px", textTransform: "uppercase" }}>XP</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: M.onTertiaryContainer, fontFamily: FONT, marginTop: 2 }}>+{workout.xp_earned}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Exercises */}
+        <div style={{ padding: "0 20px 8px" }}>
+          {loading && (
+            <div style={{ textAlign: "center", padding: "32px 0", color: M.onSurfaceVariant, fontFamily: FONT, fontSize: 13 }}>
+              Loading set details…
+            </div>
+          )}
+          {!loading && grouped.length === 0 && (
+            <div style={{ background: M.surfaceContainerHighest, borderRadius: 18, padding: "16px 18px", color: M.onSurfaceVariant, fontFamily: FONT, fontSize: 13, lineHeight: 1.5 }}>
+              Detailed set data not available for this session.
+            </div>
+          )}
+          {!loading && grouped.map((ex, i) => {
+            const pr = prByExercise[ex.name];
+            return (
+              <div key={i} style={{ background: "#FFFFFF", border: `1.5px solid ${M.outlineVariant}`, borderRadius: 18, padding: "12px 14px", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: "#1C1B1F", fontFamily: FONT }}>{ex.name}</div>
+                  <div style={{ fontSize: 11, color: "#49454F", fontFamily: FONT, fontWeight: 600 }}>{ex.rows.filter(r => r.done).length}/{ex.rows.length} sets</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr 36px 24px", gap: 6, fontSize: 10, color: M.onSurfaceVariant, fontWeight: 700, letterSpacing: ".6px", textTransform: "uppercase", fontFamily: FONT, paddingBottom: 4, borderBottom: `1px solid ${M.outlineVariant}` }}>
+                  <span>Set</span><span>Weight</span><span>Reps</span><span style={{ textAlign: "center" }}>Done</span><span />
+                </div>
+                {ex.rows.map((s, j) => {
+                  const isPR = pr && s.done && epley1RM(s.weight, s.reps) >= pr.estimated_1rm * 0.99;
+                  return (
+                    <div key={j} style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr 36px 24px", gap: 6, padding: "8px 0", borderBottom: j < ex.rows.length - 1 ? `1px solid #F0EBF3` : "none", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: s.done ? "#1C1B1F" : "#9C969F", fontFamily: FONT }}>{s.set_number}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: s.done ? "#1C1B1F" : "#9C969F", fontFamily: FONT }}>{s.done ? `${s.weight} lbs` : "—"}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: s.done ? "#1C1B1F" : "#9C969F", fontFamily: FONT }}>{s.done ? `${s.reps}` : "—"}</span>
+                      <span style={{ textAlign: "center", fontSize: 16, color: s.done ? M.greenPrimary : "#CAC4D0" }}>{s.done ? "✓" : "—"}</span>
+                      <span style={{ fontSize: 14, textAlign: "right" }}>{isPR ? "🏅" : ""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "12px 20px 28px", textAlign: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: M.greenPrimary, fontFamily: FONT }}>✓ Workout complete</div>
+          {totalSetsPlanned > 0 && (
+            <div style={{ fontSize: 12, color: "#49454F", fontFamily: FONT, marginTop: 4 }}>
+              {totalSetsCompleted} of {totalSetsPlanned} sets completed
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────
 export function ProgressAnalytics({ logs, runs, workoutExercises, personalRecords }: Props): JSX.Element {
   const [strengthEx, setStrengthEx] = useState("Barbell Bench Press");
   const [activeChart, setActiveChart] = useState<"strength" | "volume" | "1rm">("strength");
+  const [detailWorkout, setDetailWorkout] = useState<WorkoutLog | null>(null);
 
   const streak = useMemo(() => computeStreak(logs, runs), [logs, runs]);
   const totalXP = useMemo(() => logs.reduce((a, w) => a + w.xp_earned, 0), [logs]);
@@ -477,24 +624,32 @@ export function ProgressAnalytics({ logs, runs, workoutExercises, personalRecord
           {logs.slice(0, 8).map((w, i) => {
             const date = new Date(w.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
             return (
-              <div key={w.id} style={{
+              <div key={w.id} onClick={() => setDetailWorkout(w)} className="m3b" style={{
                 background: M.surfaceContainerHighest, borderRadius: 20,
                 padding: "14px 16px", marginBottom: 8,
                 display: "flex", justifyContent: "space-between", alignItems: "center",
                 animation: `stagger .25s ${i * 50}ms both`,
+                cursor: "pointer", border: `1px solid ${M.outlineVariant}`,
               }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: M.onSurface, fontFamily: FONT }}>{w.routine_emoji} {w.routine_name}</div>
                   <div style={{ fontSize: 11, color: M.onSurfaceVariant, fontFamily: FONT, marginTop: 2 }}>{date} · {w.total_sets} sets · {fmtDur(w.duration_seconds)}</div>
                 </div>
-                <div style={{ textAlign: "right" }}>
+                <div style={{ textAlign: "right", marginRight: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: M.primary, fontFamily: FONT }}>+{w.xp_earned} XP</div>
-                  <div style={{ fontSize: 11, color: M.onSurfaceVariant, fontFamily: FONT }}>{w.total_volume_kg.toFixed(0)} kg</div>
+                  <div style={{ fontSize: 11, color: M.onSurfaceVariant, fontFamily: FONT }}>{w.total_volume_kg.toFixed(0)} lbs</div>
                 </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={M.onSurfaceVariant} strokeWidth="2.2" style={{ flexShrink: 0, opacity: .65 }}>
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
               </div>
             );
           })}
         </>
+      )}
+
+      {detailWorkout && (
+        <WorkoutDetailView workout={detailWorkout} personalRecords={personalRecords} onBack={() => setDetailWorkout(null)} />
       )}
     </div>
   );
